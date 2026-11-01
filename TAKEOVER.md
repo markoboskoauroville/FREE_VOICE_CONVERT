@@ -25,3 +25,17 @@ for the pauses, and making STUDIO faster (BigVGAN 44k on the CPU is the slow par
 - **v3 window:** a workflow, ① ADD FILES, ② HOW TO EXPORT, ③ CONVERT; the round numbers are the buttons (lit and
   bigger on hover). The voice is asked once at the first CONVERT. Defaults: CONVERT, SPEECH, CLEAN. ✕ closes the window,
   OFF quits. Windows: Delete / Alt+arrows / right-click menu for the list. Live: FreeVoiceConvert-3.dmg / -3-Setup.exe.
+
+## v4 and closing (1.11.2026, 05:20)
+
+- **v4 window** (MANTRA_MANIFEST modules/workflow-interface.md, the default for every app now): ① ADD FILES | NEW TASK,
+  ② ONE BY ONE | STITCHED | BOTH, ③ CONVERT → STOP → RESUME with the percentage; one labelled table (CONVERTED, TIME LEFT,
+  ENDS AT, RUNNING, SPEED in fps | CPU, RAM FREE, GPU, VRAM FREE), hairlines, grey lines between parts, text grows with
+  the width while the list shows more files, the window remembers its place and screen. No VU (removed at his word).
+- **Engine:** each finished clip saved in `done/` (RESUME skips it; deleted when the job completes); downloads resume
+  (curl -C -, .done markers, torch wheels by curl). Proven: the 22 HIR_98 clips → stitched_fvc.mov 2:50.8, PCM 24-bit.
+- **Live:** https://freevoiceconvert.pages.dev (FreeVoiceConvert-4.dmg, FreeVoiceConvert-4-Setup.exe, the v4 window).
+- **Damjan:** the message (Free Voice Convert + Voice to Text (Mantra), Croatian) was pasted unsent into WhatsApp
+  "AI Videos"; Marko sends it. Damjan's gaming PC will be the first real Windows test of both apps.
+- **Left:** Windows never run on a real PC; STUDIO quality is slow on Macs (BigVGAN 44 k on the CPU); a dereverb step if
+  Marko hears the source room through.
