@@ -11,3 +11,11 @@
 5. **The "Mantra Apps" identity is not "valid"** for `security find-identity -v` (self-signed); look without -v.
 6. **A new Cloudflare Pages project must be created before `pages deploy`** in CI (non-interactive wrangler will not
    create it); `wrangler pages project create ... || true` before the deploy step.
+7. **Never install over a running job** (1.11.2026): build.sh replaces the app in /Applications; doing it twice during
+   Marko's 22-clip run lost the whole job (empty output folder). Build with `CI=1` (no install) while a job runs.
+8. **Helper runs must not own the job** (1.11.2026): `run()` set `proc`/`busy` for every process, so a `check` that
+   ended mid-job set busy = false and dropped the job's handle: the window showed RESUME while the engine went on and
+   STOP could not reach it. Only the job sets them now (`job:` flag), and STOP forces SIGKILL after 2 s.
+9. **Each converted clip is saved whole** (`done/<key>.wav`, written as .part then renamed), keyed by path, size,
+   mtime, profile and settings: STOP → RESUME skips finished clips (proven: RESUME went straight to 7/22, 27 %).
+10. **The interface rules of the day** are in MANTRA_MANIFEST modules/workflow-interface.md (the default for every app).
