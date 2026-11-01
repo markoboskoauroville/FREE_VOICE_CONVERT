@@ -120,3 +120,11 @@ Every request, word for word, saved and pushed before any code.
 > "yes, fix download links so every website gets each new version by itself" (Marko, 1.11.2026)
 
 **Status:** done 1.11.2026 (MANTRA_MANIFEST modules/download-always-latest.md): the buttons link download/FreeVoiceConvert.dmg and download/FreeVoiceConvert-Setup.exe; .github/workflows/site.yml fills them from the newest release after every "Build apps" and writes its tag as the version; site/public/_redirects sends the old versioned names 301 to them. Verified live: both 200, 381900 and 2134572 bytes = release v4, page shows version 4.
+
+## 1.11.2026: My studio setup, a link above the bowl
+
+> "Just above the Tibetan bowl for donation, you can just make one link, and then it will open the page with all lifestyle images and images of these products which I'm using in my development studio ... For this link, you can say "My studio setup." ... It is opening a new page, which is going to call studio setup mantra.pages.dev" (Marko, 1.11.2026)
+
+1. One centred link "My studio setup" right above the donation bowl, opening https://studiosetupmantra.pages.dev in a new tab, with the line "The gear these apps are made with · affiliate links on Amazon.de".
+
+**Status:** committed 1.11.2026, NOT pushed or deployed: waiting until Marko registers studiosetupmantra.pages.dev in Amazon PartnerNet and the studio page is live.
