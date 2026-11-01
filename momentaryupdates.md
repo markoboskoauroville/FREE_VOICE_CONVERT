@@ -103,3 +103,6 @@ Every request, word for word, saved and pushed before any code.
 
 > now, please, when there is a converted time left, it ends at running speed. The font size would be the same as CPU RAM
 > free, GPU RAM free, same. Now, convert these tiny numbers. I even cannot read. Total nonsense.
+
+> please, with the pipe next to add files, add also new task button so user can reset the user interface to be clear and
+> then add files. Without that, he's just adding more and more files

@@ -98,7 +98,7 @@ namespace FreeVoiceConvert
             root.Controls.Add(Line());
 
             var s1 = Row();
-            s1.Controls.Add(step1);
+            s1.Controls.Add(step1); s1.Controls.Add(Pipe()); s1.Controls.Add(newTask);
             root.Controls.Add(s1);
             root.Controls.Add(lstClips);
             root.Controls.Add(Line());
@@ -135,6 +135,12 @@ namespace FreeVoiceConvert
             tick.Start();
 
             step1.Click += (s, e) => PickClips();
+            newTask.Click += (s, e) =>
+            {
+                if (proc != null) return;
+                lstClips.Items.Clear(); outputs.Clear(); bar.Value = 0; lblMsg.Text = "ready";
+                totalS = doneS = startedS = 0; startedAt = null; UpdateStats(); Busy(false);
+            };
             step3.Click += (s, e) => { if (proc != null) Stop(); else if (ready) Convert(); };
             // the list without buttons: Delete removes, Alt+Up/Down moves, the right click offers the same
             lstClips.KeyDown += (s, e) =>
@@ -173,6 +179,8 @@ namespace FreeVoiceConvert
         // the round number is the button (Marko, 1.11.2026): lit on hover, a click does the step
         readonly Label step1 = StepButton("①  ADD FILES");
         readonly Label step3 = StepButton("③  CONVERT");
+        // a clean start: the list and the numbers emptied (Marko, 1.11.2026)
+        readonly Label newTask = StepButton("NEW TASK");
 
         static Label StepButton(string t)
         {
@@ -180,7 +188,7 @@ namespace FreeVoiceConvert
             l.MouseEnter += (s, e) => { if (l.Enabled) { l.ForeColor = Color.LimeGreen; l.Font = new Font("Consolas", 11f, FontStyle.Bold | FontStyle.Underline); } };
             l.MouseLeave += (s, e) => { l.ForeColor = Color.ForestGreen; l.Font = new Font("Consolas", 11f, FontStyle.Bold); };
             l.AccessibleRole = AccessibleRole.PushButton;
-            l.AccessibleName = t.Substring(3);
+            l.AccessibleName = t.TrimStart('①', '②', '③', ' ');
             return l;
         }
 

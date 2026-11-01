@@ -396,7 +396,14 @@ struct ContentView: View {
 
     var step1: some View {
         VStack(alignment: .leading, spacing: 6) {
-            StepButton(n: 1, title: "ADD FILES") { pickClips() }
+            HStack(spacing: 6) {
+                StepButton(n: 1, title: "ADD FILES") { pickClips() }
+                pipe
+                // a clean start: the list and the numbers emptied (Marko, 1.11.2026: "Without that, he's just adding
+                // more and more files")
+                Word(text: "NEW TASK", lit: !clips.isEmpty && !engine.busy, color: .primary) { newTask() }
+                    .disabled(engine.busy)
+            }
             List {
                 ForEach(clips) { c in
                     HStack {
@@ -528,6 +535,12 @@ struct ContentView: View {
                 if let u { DispatchQueue.main.async { clips.append(Clip(url: u)) } }
             }
         }
+    }
+
+    func newTask() {
+        clips = []
+        engine.outputs = []; engine.pct = 0; engine.msg = "ready"; engine.error = nil
+        engine.totalS = 0; engine.doneS = 0; engine.startedAt = nil
     }
 
     func pickClips() {
