@@ -73,6 +73,7 @@ final class SysMeters: ObservableObject {
 /// Green, amber over 70 %, red over 90 % when `warn` (the machine's load); otherwise always green (progress).
 struct Cell: View {
     let label: String; let value: String; let fill: Double; var warn = false; var invert = false
+    @Environment(\.uiScale) var k
     var color: Color {
         guard warn else { return .green }
         let load = invert ? 1 - fill : fill
@@ -80,9 +81,9 @@ struct Cell: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text(label).font(.system(size: 9, weight: .bold, design: .monospaced)).foregroundColor(.secondary)
+            Text(label).font(.system(size: 9 * k, weight: .bold, design: .monospaced)).foregroundColor(.secondary)
                 .lineLimit(1).minimumScaleFactor(0.8)
-            Text(value).font(.system(size: 12, weight: .semibold, design: .monospaced))
+            Text(value).font(.system(size: 12 * k, weight: .semibold, design: .monospaced))
                 .lineLimit(1).minimumScaleFactor(0.7)
             GeometryReader { g in
                 ZStack(alignment: .leading) {

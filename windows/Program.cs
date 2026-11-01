@@ -95,15 +95,18 @@ namespace FreeVoiceConvert
             top.Controls.Add(new Label { Text = "FREE VOICE CONVERT", AutoSize = true, Font = new Font("Consolas", 10f, FontStyle.Bold), Padding = new Padding(0, 6, 8, 0) });
             top.Controls.Add(chkTop); top.Controls.Add(lnkVersion); top.Controls.Add(btnInstall);
             root.Controls.Add(top);
+            root.Controls.Add(Line());
 
             var s1 = Row();
             s1.Controls.Add(step1);
             root.Controls.Add(s1);
             root.Controls.Add(lstClips);
+            root.Controls.Add(Line());
 
             var s2 = Row();
             s2.Controls.Add(Step("②  HOW TO EXPORT")); s2.Controls.Add(rOne); s2.Controls.Add(Pipe()); s2.Controls.Add(rStitch); s2.Controls.Add(Pipe()); s2.Controls.Add(rBoth);
             root.Controls.Add(s2);
+            root.Controls.Add(Line());
 
             var s3 = new TableLayoutPanel { Dock = DockStyle.Top, ColumnCount = 3, Height = 38 };
             s3.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); s3.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); s3.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -119,11 +122,12 @@ namespace FreeVoiceConvert
             root.Controls.Add(table);
             root.Controls.Add(txtLog);
             txtLog.Visible = false;  // the installation shows it; a conversion does not
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 82));
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            // rows: top, line, ① title, the files (all the extra height), line, ②, line, ③, message, table, log
+            foreach (var st in new[] {
+                new RowStyle(SizeType.AutoSize), new RowStyle(SizeType.Absolute, 9), new RowStyle(SizeType.AutoSize),
+                new RowStyle(SizeType.Percent, 100), new RowStyle(SizeType.Absolute, 9), new RowStyle(SizeType.AutoSize),
+                new RowStyle(SizeType.Absolute, 9), new RowStyle(SizeType.Absolute, 44), new RowStyle(SizeType.Absolute, 26),
+                new RowStyle(SizeType.Absolute, 82), new RowStyle(SizeType.AutoSize) }) root.RowStyles.Add(st);
             tick.Tick += (s, e) => { UpdateStats(); meters.Read(); hCpu.Set(meters.Cpu, $"{meters.Cpu * 100:0}%");
                 hRam.Set(meters.RamTotal > 0 ? meters.RamFree / meters.RamTotal : 0, Gb(meters.RamFree));
                 hGpu.Set(meters.Gpu, meters.Gpu < 0 ? "–" : $"{meters.Gpu * 100:0}%");
@@ -162,6 +166,7 @@ namespace FreeVoiceConvert
             DragEnter += (s, e) => e.Effect = DragDropEffects.Copy;
             DragDrop += (s, e) => { foreach (var f in (string[])e.Data.GetData(DataFormats.FileDrop)) lstClips.Items.Add(f); };
             FormClosing += (s, e) => { SaveSettings(); Stop(); };
+            StartPosition = FormStartPosition.Manual;
             Shown += (s, e) => { LoadSettings(); Check(); };
         }
 
@@ -182,6 +187,9 @@ namespace FreeVoiceConvert
         static Label Step(string t) => new Label { Text = t, AutoSize = true, Font = new Font("Consolas", 10.5f, FontStyle.Bold), ForeColor = Color.ForestGreen, Padding = new Padding(0, 7, 10, 0) };
 
         // choices on one line are parted by pipes (Marko, 1.11.2026)
+        // a thin grey line across the window between the parts (Marko, 1.11.2026, as in his Network Aggregate window)
+        static Control Line() => new Panel { Height = 1, Dock = DockStyle.Top, BackColor = Color.FromArgb(90, 128, 128, 128), Margin = new Padding(0, 4, 0, 4) };
+
         static Label Pipe() => new Label { Text = "|", AutoSize = true, ForeColor = Color.Gray, Font = new Font("Consolas", 10.5f, FontStyle.Bold), Padding = new Padding(0, 4, 0, 0) };
 
         static FlowLayoutPanel Row() => new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true };
@@ -205,7 +213,9 @@ namespace FreeVoiceConvert
         }
 
         // ---------------------------------------------------------------- the engine
-        void Run(string exe, string args, Action<int> done)
+        // job: the conversion or the installation, which STOP / RESUME follow; a helper run (check, profile) never
+        // touches proc or the busy state (a check ending during a job used to lose the job, 1.11.2026)
+        void Run(string exe, string args, Action<int> done, bool job = true)
         {
             var psi = new ProcessStartInfo(exe, args)
             {
@@ -218,12 +228,12 @@ namespace FreeVoiceConvert
             var p = new Process { StartInfo = psi, EnableRaisingEvents = true };
             p.OutputDataReceived += (s, e) => { if (e.Data != null) BeginInvoke(new Action(() => Line(e.Data))); };
             p.ErrorDataReceived += (s, e) => { if (e.Data != null) BeginInvoke(new Action(() => Line(e.Data))); };
-            p.Exited += (s, e) => BeginInvoke(new Action(() => { int c = p.ExitCode; proc = null; Busy(false); done(c); }));
-            try { p.Start(); p.BeginOutputReadLine(); p.BeginErrorReadLine(); proc = p; Busy(true); }
+            p.Exited += (s, e) => BeginInvoke(new Action(() => { int c = p.ExitCode; if (job && proc == p) { proc = null; Busy(false); } done(c); }));
+            try { p.Start(); p.BeginOutputReadLine(); p.BeginErrorReadLine(); if (job) { proc = p; Busy(true); } }
             catch (Exception ex) { lblMsg.Text = "could not start: " + ex.Message; lblMsg.ForeColor = Color.Firebrick; }
         }
 
-        void Py(string args, Action<int> done) => Run(Python, Q(Fvc) + " " + args, done);
+        void Py(string args, Action<int> done, bool job = true) => Run(Python, Q(Fvc) + " " + args, done, job);
         static string Q(string s) => "\"" + s.Replace("\"", "\\\"") + "\"";
 
         void Line(string s)
@@ -258,7 +268,8 @@ namespace FreeVoiceConvert
         void Busy(bool b)
         {
             btnGo.Text = b ? "STOP" : "CONVERT";
-            step3.Text = b ? "③  STOP" : "③  CONVERT";
+            // one button: CONVERT, STOP while it runs, RESUME after a STOP (Marko, 1.11.2026)
+            step3.Text = b ? "③  STOP" : (totalS > 0 && doneS > 0 && outputs.Count == 0 ? "③  RESUME" : "③  CONVERT");
             btnInstall.Enabled = !b; btnVoice.Enabled = !b && ready;
         }
 
@@ -270,7 +281,8 @@ namespace FreeVoiceConvert
             // not complete: the installation goes on by itself from where it stopped (once per start; nothing is
             // downloaded twice: curl -C -, uv's cache, Hugging Face's partial files)
             if (!File.Exists(Python)) { SetReady(false, "installing"); Resume(); return; }
-            Py("check", c => { SetReady(c == 0, c == 0 ? "ready" : "some parts are missing"); if (c == 0) LoadProfiles(); else Resume(); });
+            if (proc != null) return;  // a job is running: everything is here
+            Py("check", c => { SetReady(c == 0, c == 0 ? "ready" : "some parts are missing"); if (c == 0) LoadProfiles(); else Resume(); }, false);
         }
 
         void Resume()
@@ -334,7 +346,7 @@ namespace FreeVoiceConvert
                     var i = profiles.FindIndex(p => p.name == name);
                     if (i >= 0) cmbProfile.SelectedIndex = i;
                     if (thenConvert) Convert();
-                });
+                }, false);
             }
         }
 
@@ -410,6 +422,12 @@ namespace FreeVoiceConvert
                 rStudio.Checked = (string)j["quality"] == "studio"; rSpeech.Checked = !rStudio.Checked;
                 var ex = (string)j["export"]; rStitch.Checked = ex == "stitched"; rBoth.Checked = ex == "both"; rOne.Checked = ex == "individual";
                 chkClean.Checked = (bool)j["clean"]; chkTop.Checked = (bool)j["top"];
+                // the window where it was, on the screen it was on, if that screen is still there
+                if (j.TryGetValue("x", out var x) && j.TryGetValue("y", out var y) && j.TryGetValue("w", out var w) && j.TryGetValue("h", out var h))
+                {
+                    var r = new Rectangle(System.Convert.ToInt32(x), System.Convert.ToInt32(y), System.Convert.ToInt32(w), System.Convert.ToInt32(h));
+                    if (Screen.AllScreens.Any(sc => sc.WorkingArea.IntersectsWith(r))) Bounds = r;
+                }
             }
             catch { }
         }
@@ -426,6 +444,10 @@ namespace FreeVoiceConvert
                     ["quality"] = rStudio.Checked ? "studio" : "speech",
                     ["export"] = rStitch.Checked ? "stitched" : rBoth.Checked ? "both" : "individual",
                     ["clean"] = chkClean.Checked, ["top"] = chkTop.Checked,
+                    ["x"] = (WindowState == FormWindowState.Normal ? Bounds : RestoreBounds).X,
+                    ["y"] = (WindowState == FormWindowState.Normal ? Bounds : RestoreBounds).Y,
+                    ["w"] = (WindowState == FormWindowState.Normal ? Bounds : RestoreBounds).Width,
+                    ["h"] = (WindowState == FormWindowState.Normal ? Bounds : RestoreBounds).Height,
                 }));
             }
             catch { }

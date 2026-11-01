@@ -27,6 +27,11 @@ enum Paths {
     }
 }
 
+/// How much bigger the words are than at the narrowest window (Marko, 1.11.2026: "when I'm resizing the app, everything
+/// is becoming bigger ... the area where my files are is not enlarging the font size ... I want to see more of my files").
+private struct UIScaleKey: EnvironmentKey { static let defaultValue: CGFloat = 1 }
+extension EnvironmentValues { var uiScale: CGFloat { get { self[UIScaleKey.self] } set { self[UIScaleKey.self] = newValue } } }
+
 struct Profile: Identifiable, Hashable, Decodable { let id: String; let name: String; let source: String; let dir: String }
 
 struct Clip: Identifiable, Hashable { let id = UUID(); let url: URL }
@@ -48,7 +53,10 @@ final class Engine: ObservableObject {
     @Published var fps: Double = 25         // the clips' frame rate (25 for sound only): the speed is frames per second
     private var proc: Process?
 
-    func run(_ exe: URL, _ args: [String], done: @escaping (Int32) -> Void) {
+    /// `job`: the conversion or the installation, which STOP / RESUME follow. A helper run (check, profile) never
+    /// touches `proc` or `busy`; before, a check that ended during a job made the window lose the running job
+    /// (it showed RESUME while the engine went on, and STOP could not reach it), 1.11.2026.
+    func run(_ exe: URL, _ args: [String], job: Bool = true, done: @escaping (Int32) -> Void) {
         let p = Process()
         p.executableURL = exe
         p.arguments = args
@@ -72,9 +80,12 @@ final class Engine: ObservableObject {
         }
         p.terminationHandler = { [weak self] t in
             pipe.fileHandleForReading.readabilityHandler = nil
-            DispatchQueue.main.async { self?.proc = nil; self?.busy = false; done(t.terminationStatus) }
+            DispatchQueue.main.async {
+                if job, self?.proc === t { self?.proc = nil; self?.busy = false }
+                done(t.terminationStatus)
+            }
         }
-        do { try p.run(); proc = p; busy = true; error = nil } catch {
+        do { try p.run(); if job { proc = p; busy = true; error = nil } } catch {
             self.error = "could not start: \(error.localizedDescription)"
         }
     }
@@ -100,10 +111,16 @@ final class Engine: ObservableObject {
         if log.count > 400 { log.removeFirst(log.count - 400) }
     }
 
-    func stop() { proc?.terminate() }
+    /// STOP always stops: asked politely, then forced after 2 s (a busy torch thread can sit on a SIGTERM).
+    func stop() {
+        guard let p = proc else { return }
+        p.terminate()
+        let pid = p.processIdentifier
+        DispatchQueue.global().asyncAfter(deadline: .now() + 2) { if p.isRunning { kill(pid, SIGKILL) } }
+    }
 
-    func py(_ args: [String], done: @escaping (Int32) -> Void) {
-        run(Paths.python, [Paths.engine.appendingPathComponent("fvc.py").path] + args, done: done)
+    func py(_ args: [String], job: Bool = true, done: @escaping (Int32) -> Void) {
+        run(Paths.python, [Paths.engine.appendingPathComponent("fvc.py").path] + args, job: job, done: done)
     }
 
     private var autoResumed = false
@@ -112,7 +129,8 @@ final class Engine: ObservableObject {
     /// uv, Hugging Face and curl all continue partial downloads, so nothing is fetched twice).
     func check() {
         guard FileManager.default.fileExists(atPath: Paths.python.path) else { ready = false; resume(); return }
-        py(["check"]) { [weak self] code in
+        if busy { return }  // a job is running: everything is here
+        py(["check"], job: false) { [weak self] code in
             guard let self else { return }
             self.ready = code == 0
             if code == 0 { self.msg = "ready"; self.loadProfiles() } else { self.resume() }
@@ -150,9 +168,10 @@ final class Engine: ObservableObject {
 // MARK: - the window
 struct Word: View {
     let text: String; let lit: Bool; var color: Color = .green; let action: () -> Void
+    @Environment(\.uiScale) var k
     var body: some View {
         Button(action: action) {
-            Text(text).font(.system(size: 12, weight: .bold, design: .monospaced))
+            Text(text).font(.system(size: 12 * k, weight: .bold, design: .monospaced))
                 .foregroundColor(lit ? color : Color.gray.opacity(0.55))
                 .padding(.horizontal, 6).padding(.vertical, 3).contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityLabel(text)
@@ -173,15 +192,31 @@ struct ContentView: View {
     @State var clipsTotal: Double = 0
     @State var showLog = false
 
+    @State var scale: CGFloat = 1
+    @State var checkedOnce = false
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            topRow
-            if !engine.ready { installPanel; if engine.busy { logView } } else { step1; step2; step3 }
+        VStack(alignment: .leading, spacing: 12 * scale) {
+            topRow.fixedSize(horizontal: false, vertical: true)
+            line
+            if !engine.ready { installPanel; if engine.busy { logView } } else {
+                step1.layoutPriority(1)                                  // the extra height goes to the files
+                line
+                step2.fixedSize(horizontal: false, vertical: true)
+                line
+                step3.fixedSize(horizontal: false, vertical: true)
+            }
         }
         .padding(16)
-        .frame(minWidth: 500, minHeight: 520)
+        .frame(minWidth: 500, maxWidth: .infinity, minHeight: 560, maxHeight: .infinity, alignment: .top)  // glued to the top
+        .environment(\.uiScale, scale)
+        .background(GeometryReader { g in
+            Color.clear
+                .onAppear { scale = min(max(g.size.width / 520, 1), 2.2) }
+                .onChange(of: g.size.width) { _, w in scale = min(max(w / 520, 1), 2.2) }
+        })
         .onAppear {
-            engine.check()
+            if !checkedOnce { checkedOnce = true; engine.check() }
             applyTop()
         }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in add(providers); return true }
@@ -200,13 +235,13 @@ struct ContentView: View {
 
     var topRow: some View {
         HStack(spacing: 2) {
-            Text("FREE VOICE CONVERT").font(.system(size: 12, weight: .bold, design: .monospaced))
+            Text("FREE VOICE CONVERT").font(.system(size: 12 * scale, weight: .bold, design: .monospaced))
             Word(text: "ON", lit: true) {}
             Word(text: "OFF", lit: false) { engine.stop(); NSApp.terminate(nil) }
             Spacer(minLength: 4)
             Word(text: "TOP", lit: onTop) { onTop.toggle(); applyTop() }
             Button { if let u = URL(string: SITE) { NSWorkspace.shared.open(u) } } label: {
-                Text("v\(VERSION)").font(.system(size: 11, design: .monospaced)).foregroundColor(.secondary)
+                Text("v\(VERSION)").font(.system(size: 11 * scale, design: .monospaced)).foregroundColor(.secondary)
             }.buttonStyle(.plain).accessibilityLabel("version \(VERSION)")
             Button { NSApp.keyWindow?.close() } label: {
                 Image(systemName: "xmark").foregroundColor(.gray).frame(width: 28, height: 28).contentShape(Rectangle())
@@ -328,9 +363,10 @@ struct ContentView: View {
     // MARK: the workflow, three steps top to bottom (Marko, 1.11.2026: "make all my interface a workflow, 1, 2, 3")
     func stepTitle(_ n: Int, _ t: String) -> some View {
         HStack(spacing: 8) {
-            Text("\(n)").font(.system(size: 13, weight: .bold, design: .monospaced)).foregroundColor(.black)
-                .frame(width: 22, height: 22).background(Circle().fill(Color.green.opacity(0.55)))
-            Text(t).font(.system(size: 13, weight: .bold, design: .monospaced))
+            Text("\(n)").font(.system(size: 13 * scale, weight: .bold, design: .monospaced)).foregroundColor(.black)
+                .frame(width: 22 * scale, height: 22 * scale).background(Circle().fill(Color.green.opacity(0.55)))
+                .frame(width: 28 * scale)
+            Text(t).font(.system(size: 13 * scale, weight: .bold, design: .monospaced))
         }
     }
 
@@ -338,16 +374,17 @@ struct ContentView: View {
     struct StepButton: View {
         let n: Int; let title: String; var enabled = true; let action: () -> Void
         @State private var hover = false
+        @Environment(\.uiScale) var k
         var body: some View {
             Button(action: action) {
                 HStack(spacing: 8) {
-                    Text("\(n)").font(.system(size: hover ? 15 : 13, weight: .bold, design: .monospaced))
+                    Text("\(n)").font(.system(size: (hover ? 15 : 13) * k, weight: .bold, design: .monospaced))
                         .foregroundColor(.black)
-                        .frame(width: hover ? 28 : 22, height: hover ? 28 : 22)
+                        .frame(width: (hover ? 28 : 22) * k, height: (hover ? 28 : 22) * k)
                         .background(Circle().fill(enabled ? (hover ? Color(red: 0.55, green: 1, blue: 0.6) : Color.green) : Color.gray.opacity(0.5)))
                         .overlay(Circle().stroke(Color.white.opacity(hover && enabled ? 0.9 : 0), lineWidth: 2))
-                        .frame(width: 28, height: 28)
-                    Text(title).font(.system(size: 13, weight: .bold, design: .monospaced))
+                        .frame(width: 28 * k, height: 28 * k)
+                    Text(title).font(.system(size: 13 * k, weight: .bold, design: .monospaced))
                         .foregroundColor(enabled ? (hover ? .green : .primary) : .secondary)
                         .underline(hover && enabled)
                 }.contentShape(Rectangle())
@@ -371,7 +408,7 @@ struct ContentView: View {
                     }
                 }.onMove { clips.move(fromOffsets: $0, toOffset: $1) }
             }
-            .frame(minHeight: 160)
+            .frame(minHeight: 110, maxHeight: .infinity)
             .overlay { if clips.isEmpty { Text("drop any audio or video file here\n(drag to change the order)").multilineTextAlignment(.center).foregroundColor(.secondary) } }
         }
     }
@@ -385,35 +422,49 @@ struct ContentView: View {
                 Word(text: "STITCHED", lit: export == "stitched") { export = "stitched" }
                 pipe
                 Word(text: "BOTH", lit: export == "both") { export = "both" }
-            }.padding(.leading, 26)
+            }.padding(.leading, 28 * scale)
         }
     }
 
+    /// A thin grey line across the window between the parts (Marko, 1.11.2026, as in his Network Aggregate window).
+    var line: some View { Rectangle().fill(Color.white.opacity(0.16)).frame(height: 1).padding(.horizontal, -16) }
+
+    var stoppedPartway: Bool { !engine.busy && engine.totalS > 0 && engine.doneS > 0 && engine.outputs.isEmpty }
+
     // choices on one line are parted by pipes (Marko, 1.11.2026: "You need to give me pipes")
     var pipe: some View {
-        Text("|").font(.system(size: 12, weight: .bold, design: .monospaced)).foregroundColor(.gray.opacity(0.6))
+        Text("|").font(.system(size: 12 * scale, weight: .bold, design: .monospaced)).foregroundColor(.gray.opacity(0.6))
             .accessibilityHidden(true)
     }
 
     var step3: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 12) {
-                StepButton(n: 3, title: engine.busy ? "STOP" : "CONVERT", enabled: engine.busy || !clips.isEmpty) {
+                // one button: CONVERT, STOP while it runs, RESUME after a STOP (Marko, 1.11.2026)
+                StepButton(n: 3, title: engine.busy ? "STOP" : (stoppedPartway ? "RESUME" : "CONVERT"),
+                           enabled: engine.busy || !clips.isEmpty) {
                     engine.busy ? engine.stop() : convert()
                 }.keyboardShortcut(.return)
                 // the percentage beside it; after a STOP: "CONVERTED 50 %", and CONVERT goes on from there
                 if engine.totalS > 0 && (engine.busy || engine.doneS > 0) && engine.outputs.isEmpty {
                     let p = Int((engine.doneS / engine.totalS * 100).rounded(.down))
                     Text(engine.busy ? "\(p) %" : "CONVERTED \(p) %")
-                        .font(.system(size: 13, weight: .bold, design: .monospaced))
+                        .font(.system(size: 13 * scale, weight: .bold, design: .monospaced))
                         .foregroundColor(engine.busy ? .green : .orange)
                         .accessibilityLabel("converted \(p) percent")
                 }
             }
-            ProgressView(value: engine.pct, total: 100).padding(.leading, 26)
-            Text(engine.msg).font(.callout).foregroundColor(engine.error == nil ? .secondary : .red)
-                .lineLimit(3).fixedSize(horizontal: false, vertical: true).padding(.leading, 26)
-            stats.padding(.leading, 26)
+            GeometryReader { g in  // everything in this app is a hairline, the progress too
+                ZStack(alignment: .leading) {
+                    Rectangle().fill(Color.white.opacity(0.12))
+                    Rectangle().fill(Color.green).frame(width: max(1, g.size.width * min(engine.pct / 100, 1)))
+                        .animation(.easeOut(duration: 0.3), value: engine.pct)
+                }
+            }.frame(height: 1).padding(.leading, 28 * scale)
+                .accessibilityLabel("progress \(Int(engine.pct)) percent")
+            Text(engine.msg).font(.system(size: 12 * scale)).foregroundColor(engine.error == nil ? .secondary : .red)
+                .lineLimit(3).fixedSize(horizontal: false, vertical: true).padding(.leading, 28 * scale)
+            stats.padding(.leading, 28 * scale)
         }
     }
 
@@ -460,7 +511,13 @@ struct ContentView: View {
 
     // MARK: actions
     func applyTop() {
-        DispatchQueue.main.async { NSApp.windows.forEach { $0.level = onTop ? .floating : .normal } }
+        DispatchQueue.main.async {
+            NSApp.windows.forEach { $0.level = onTop ? .floating : .normal }
+            // the window comes back where it was, on the screen it was on (macOS keeps the frame and the screen)
+            if let w = NSApp.windows.first(where: { $0.title.contains("Free Voice Convert") }), w.frameAutosaveName.isEmpty {
+                w.setFrameAutosaveName("FreeVoiceConvertMain")
+            }
+        }
     }
 
     func isVideo(_ u: URL) -> Bool { ["mp4", "mov", "m4v", "mkv", "avi", "webm"].contains(u.pathExtension.lowercased()) }
@@ -484,7 +541,7 @@ struct ContentView: View {
         o.message = "Pick a clean recording of the voice (10 to 30 seconds of speech is enough)"
         guard o.runModal() == .OK, let u = o.url else { return }
         let name = u.deletingPathExtension().lastPathComponent
-        engine.py(["profile", u.path, name]) { code in
+        engine.py(["profile", u.path, name], job: false) { code in
             if code == 0 {
                 engine.loadProfiles()
                 profileID = engine.profiles.first { $0.name == name }?.id ?? profileID

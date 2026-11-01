@@ -80,3 +80,23 @@ Every request, word for word, saved and pushed before any code.
 > I also need to see percentage converted. When I press "Stop to Convert," next to "Convert" it needs to say
 > "Percentage." Instead of "Convert," it needs to say "Converted," let's say 50%. When I say "Convert" again, it
 > continues
+
+> please, as I'm resizing the user interface, all these status text converted time left [are] free. It's also enlarging
+> [i.e. the status text should grow with the window]
+
+> in this app, everything is hairlined. Under Converted, this progress bar should also be hairlined
+
+> please, when I'm resizing the user interface, my top row, "Free Voice Converter of Top V4X," is being removed from
+> the top of the program. I want this thing to be glued to the top. It doesn't fall apart. Actually, I want this: when
+> I'm resizing the app, everything is becoming bigger, but at the same time, the area where my files are is not
+> enlarging the font size. They are the same. Usually, when I'm resizing things, I want to see more of that box, more
+> of my files
+
+> to make things clear, you need to also build. Now it's 3, converted 8%. That must have a pause button and a stop button
+> but actually, one button is enough: only Stop. Then when you press Stop, Stop becomes Resume
+
+> in this app, please build a horizontal line before and after every step. You can look at my app now. It's on screen,
+> called Download Aggregator. Add horizontal lines so we can clearly and visually see the distinction between elements
+> of this user interface
+
+> if not already, this app should remember its last position and on which screen it was positioned
