@@ -217,10 +217,14 @@ def cmd_run(job_path):
 
     infos, audios, outputs = [], [], []
     t0 = time.time()
+    pre = [probe(c) for c in clips]
+    total_s = sum(p["dur"] for p in pre)  # the whole length: the counter and the estimate count in these seconds
+    done_before = 0.0
+    say(pct=2, msg=f"{n} files, {total_s:.1f} s of sound", total_s=round(total_s, 2), done_s=0)
     for i, clip in enumerate(clips):
         base = 2 + 90 * i / n
         span = 90 / n
-        info = probe(clip)
+        info = pre[i]
         if not info["audio"]:
             raise RuntimeError(f"{os.path.basename(clip)} has no sound")
         infos.append(info)
@@ -229,8 +233,9 @@ def cmd_run(job_path):
                                     f"{info['bits'] or 'lossy'}{'' if info['bits'] in (None, 'float') else '-bit'})", clip=i)
         x, sr = read_audio(clip, info, clean=job.get("clean", True))
         if convert:
-            def prog(f, i=i, base=base, span=span, name=name):
-                say(pct=round(base + span * 0.8 * f, 1), msg=f"{i + 1}/{n} {name}: the voice", clip=i)
+            def prog(f, i=i, base=base, span=span, name=name, d=info["dur"], b=done_before):
+                say(pct=round(base + span * 0.8 * f, 1), msg=f"{i + 1}/{n} {name}: the voice", clip=i,
+                    total_s=round(total_s, 2), done_s=round(b + 0.9 * f * d, 2))
             y, ysr = vc.convert(x.mean(axis=1), sr, ref, steps=steps, progress=prog)
             import librosa
             y = librosa.resample(y, orig_sr=ysr, target_sr=sr, res_type="soxr_vhq").astype(np.float32)
@@ -244,13 +249,27 @@ def cmd_run(job_path):
         audios.append(y)
         if export in ("individual", "both"):
             outputs.append(export_one(clip, info, y, sr, outdir, name))
-        say(pct=round(base + span, 1), msg=f"{i + 1}/{n} {name}: done", clip=i)
+        done_before += info["dur"]
+        # the VU meters: 20 readings a second of the clip before (in) and after (out), in dBFS
+        say(pct=round(base + span, 1), msg=f"{i + 1}/{n} {name}: done", clip=i, total_s=round(total_s, 2),
+            done_s=round(done_before, 2), vu_in=envelope(x, sr), vu_out=envelope(y, sr))
 
     if export in ("stitched", "both"):
         say(pct=93, msg="stitching")
         outputs.append(stitch(clips, infos, audios, outdir))
     say(pct=100, msg=f"finished in {time.time() - t0:.0f} s", done=True, outputs=outputs)
     return 0
+
+
+def envelope(x, sr, rate=20):
+    import numpy as np
+    m = np.abs(x).max(axis=1) if x.ndim == 2 else np.abs(x)
+    hop = max(1, sr // rate)
+    n = len(m) // hop
+    if n == 0:
+        return []
+    peaks = m[: n * hop].reshape(n, hop).max(axis=1)
+    return [round(float(v), 1) for v in 20 * np.log10(np.maximum(peaks, 1e-5))]
 
 
 def video_out(clip):

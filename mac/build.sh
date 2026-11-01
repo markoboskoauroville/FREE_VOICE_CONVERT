@@ -8,7 +8,7 @@ V=$(sed -n 's/^let VERSION = \([0-9]*\)/\1/p' App.swift)
 NAME="Free Voice Convert Equalizer (Mantra)"
 APP="build/$NAME.app"
 rm -rf "$APP"; mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-swiftc -O -swift-version 5 -parse-as-library -target arm64-apple-macos14.0 -o "$APP/Contents/MacOS/FreeVoiceConvert" App.swift
+swiftc -O -swift-version 5 -parse-as-library -target arm64-apple-macos14.0 -o "$APP/Contents/MacOS/FreeVoiceConvert" App.swift Meters.swift
 (cd icon && swift make_icon.swift "$V" >/dev/null)
 I=build/AppIcon.iconset; rm -rf $I; mkdir -p $I
 for s in 16 32 128 256 512; do

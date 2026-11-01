@@ -49,3 +49,21 @@ Every request, word for word, saved and pushed before any code.
 > horizontal. On one side is CPU, and on the other is GPU. They are just showing the current status. Also, two more:
 > memory available (RAM) and GPU memory available. Also, volmeters. Make it happen
 > (Marko, right after: "VU METERS ... THAT WAS MISSSPELET BY SPEACH TO TEXT": volmeters = VU meters.)
+
+## 1.11.2026, later still: the style, one line, resume, no VU
+
+> please make this app in my style. If you look at the TTT Mini repository, you will understand: first CPU, RAM, GPU,
+> VRAM. The [VU] meter itself should be from [edge] to [edge], and then it should be hairline only
+
+> all the times of estimation should be in only one line. Don't make converted time left finishes running everything
+> in multiple lines. Make it everything in one line in one row
+
+> feel free to extend the width of the application to accommodate all the numbers
+
+> in this app, like in any app which downloads, you just need to always resume downloads. Even if the user closes the
+> application and you open, it will continue where it left off so the user doesn't need to do it again
+
+> I don't need a VU meter at the bottom. What is this? I don't understand. There is some VU meter appearing at the
+> bottom of the screen Remove that.
+
+> when I say a meter is not literally a meter, it's just an indication, remove that

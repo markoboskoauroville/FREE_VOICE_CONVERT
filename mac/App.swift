@@ -4,8 +4,9 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import AVFoundation
 
-let VERSION = 3
+let VERSION = 4
 let APPNAME = "Free Voice Convert Equalizer (Mantra)"
 let SITE = "https://freevoiceconvert.pages.dev"
 
@@ -40,6 +41,13 @@ final class Engine: ObservableObject {
     @Published var profiles: [Profile] = []
     @Published var outputs: [String] = []
     @Published var error: String?
+    @Published var totalS: Double = 0       // the length of all the clips
+    @Published var doneS: Double = 0        // how much of it is converted
+    @Published var startedAt: Date?         // when the first second was converted (the model's loading is not counted)
+    @Published var startedS: Double = 0
+    @Published var vuIn: [Double] = []      // the last finished clip, 20 readings a second, before and after
+    @Published var vuOut: [Double] = []
+    @Published var vuStart = Date()
     private var proc: Process?
 
     func run(_ exe: URL, _ args: [String], done: @escaping (Int32) -> Void) {
@@ -81,6 +89,12 @@ final class Engine: ObservableObject {
             if let m = j["msg"] as? String { msg = m }
             if let e = j["error"] as? String { error = e; msg = e }
             if let o = j["outputs"] as? [String], !o.isEmpty { outputs = o }
+            if let t = j["total_s"] as? Double { totalS = t }
+            if let d = j["done_s"] as? Double {
+                if startedAt == nil && j["clip"] != nil { startedAt = Date(); startedS = d }
+                doneS = d
+            }
+            if let a = j["vu_in"] as? [Double], let b = j["vu_out"] as? [Double] { vuIn = a; vuOut = b; vuStart = Date() }
             return
         }
         log.append(t)
@@ -146,6 +160,8 @@ struct ContentView: View {
     @AppStorage("export") var export = "individual"
     @AppStorage("clean") var clean = true
     @AppStorage("onTop") var onTop = false
+    @StateObject var sys = SysMeters()
+    @State var clipsTotal: Double = 0
     @State var showLog = false
 
     var body: some View {
@@ -154,7 +170,8 @@ struct ContentView: View {
             if !engine.ready { installPanel; if engine.busy { logView } } else { step1; step2; step3 }
         }
         .padding(16)
-        .frame(minWidth: 360, minHeight: 420)
+        .safeAreaInset(edge: .bottom, spacing: 0) { if engine.ready { vuEdge } }
+        .frame(minWidth: 460, minHeight: 500)
         .onAppear {
             engine.check()
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {  // the first start installs by itself
@@ -163,6 +180,17 @@ struct ContentView: View {
             applyTop()
         }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in add(providers); return true }
+        .onChange(of: clips) { _, cs in
+            let urls = cs.map { $0.url }
+            Task.detached {
+                var t = 0.0
+                for u in urls { if let d = try? await AVURLAsset(url: u).load(.duration), d.isNumeric { t += d.seconds } }
+                await MainActor.run { clipsTotal = t }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .fvcOpen)) { n in
+            if let us = n.object as? [URL] { clips += us.map { Clip(url: $0) } }
+        }
     }
 
     var topRow: some View {
@@ -362,7 +390,67 @@ struct ContentView: View {
             ProgressView(value: engine.pct, total: 100).padding(.leading, 26)
             Text(engine.msg).font(.callout).foregroundColor(engine.error == nil ? .secondary : .red)
                 .lineLimit(3).fixedSize(horizontal: false, vertical: true).padding(.leading, 26)
+            stats.padding(.leading, 26)
+            meters.padding(.leading, 26).padding(.top, 4)
         }
+    }
+
+    // where we are, how long it still takes (counting down), and the clock time it finishes
+    var stats: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { ctx in
+            let e = engine
+            let total = e.totalS > 0 ? e.totalS : clipsTotal
+            let rate: Double? = {
+                guard let st = e.startedAt, e.doneS - e.startedS > 0.5 else { return nil }
+                return (e.doneS - e.startedS) / ctx.date.timeIntervalSince(st)  // seconds of sound per second
+            }()
+            let left: Double? = rate.map { max(0, (total - e.doneS) / $0) }
+            let elapsed = e.startedAt.map { ctx.date.timeIntervalSince($0) } ?? 0
+            let parts: [String] = [
+                "\(clock(e.doneS)) / \(clock(total))",
+                e.busy ? (left.map { "−" + clock($0) } ?? "−…") : nil,
+                e.busy ? left.map { "ends " + Date().addingTimeInterval($0).formatted(date: .omitted, time: .shortened) } : nil,
+                e.busy && e.startedAt != nil ? clock(elapsed) + (rate.map { String(format: " %.1f×", $0) } ?? "") : nil,
+            ].compactMap { $0 }
+            Text(parts.joined(separator: "  ·  ")).font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .lineLimit(1).minimumScaleFactor(0.6)
+                .accessibilityLabel("converted, time left, finishes, running: " + parts.joined(separator: ", "))
+        }
+    }
+
+    func statRow(_ k: String, _ v: String) -> some View {
+        HStack(spacing: 8) {
+            Text(k).font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundColor(.secondary).frame(width: 76, alignment: .leading)
+            Text(v).font(.system(size: 13, weight: .semibold, design: .monospaced)).lineLimit(1).minimumScaleFactor(0.7)
+        }
+    }
+
+    var meters: some View {
+        HStack(spacing: 10) {
+            Hair(label: "CPU", value: sys.cpu, text: "\(Int(sys.cpu * 100))%")
+            Hair(label: "RAM", value: sys.ramTotal > 0 ? sys.ramFree / sys.ramTotal : 0, text: gb(sys.ramFree), invert: true)
+            Hair(label: "GPU", value: sys.gpu, text: "\(Int(sys.gpu * 100))%")
+            Hair(label: "VRAM", value: sys.vramTotal > 0 ? sys.vramFree / sys.vramTotal : 0, text: gb(sys.vramFree), invert: true)
+        }
+    }
+
+    // the two VU hairlines (before, after) from edge to edge at the bottom of the window
+    var vuEdge: some View {
+        TimelineView(.animation(minimumInterval: 0.05)) { ctx in
+            let k = Int(ctx.date.timeIntervalSince(engine.vuStart) * 20)
+            VStack(spacing: 2) {
+                VUHair(db: vuAt(engine.vuIn, k), peak: vuPeak(engine.vuIn, k))
+                VUHair(db: vuAt(engine.vuOut, k), peak: vuPeak(engine.vuOut, k))
+            }
+        }
+    }
+
+    // the VU meters replay the last finished clip at its own speed, before (IN) and after (OUT), again and again
+    func vuAt(_ a: [Double], _ k: Int) -> Double { a.isEmpty || !engine.busy && engine.outputs.isEmpty && engine.doneS == 0 ? -60 : a[k % a.count] }
+    func vuPeak(_ a: [Double], _ k: Int) -> Double {
+        guard !a.isEmpty else { return -60 }
+        let i = k % a.count
+        return a[max(0, i - 30)...i].max() ?? -60
     }
 
     // MARK: actions
@@ -405,6 +493,7 @@ struct ContentView: View {
             pickVoice(thenConvert: true); return
         }
         engine.outputs = []; engine.log = []; engine.pct = 0
+        engine.totalS = 0; engine.doneS = 0; engine.startedAt = nil; engine.vuIn = []; engine.vuOut = []
         let job: [String: Any] = ["clips": clips.map { $0.url.path }, "profile": p.dir, "voice": "convert",
                                   "quality": "speech", "export": export, "clean": true, "steps": 30]
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("fvc-job-\(UUID().uuidString).json")
@@ -418,7 +507,12 @@ struct ContentView: View {
     }
 }
 
+extension Notification.Name { static let fvcOpen = Notification.Name("fvcOpen") }
+
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    func application(_ application: NSApplication, open urls: [URL]) {  // files dropped on the Dock icon or `open -a`
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { NotificationCenter.default.post(name: .fvcOpen, object: urls) }
+    }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if !flag { sender.windows.first?.makeKeyAndOrderFront(nil) }
@@ -431,6 +525,6 @@ struct FreeVoiceConvertApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     var body: some Scene {
         Window(APPNAME, id: "main") { ContentView() }
-            .defaultSize(width: 420, height: 540)
+            .defaultSize(width: 500, height: 600)
     }
 }
