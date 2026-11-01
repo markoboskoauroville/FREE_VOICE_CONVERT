@@ -70,3 +70,5 @@ Every request, word for word, saved and pushed before any code.
 
 > please don't calculate the final speed in x. Calculate it at frames per second. How many frames per second? From 25
 > frames. This is converting. Or if they have video files, you can just take their own frame rate
+
+> we have in the rule "How to export." I am missing: - Pipes - One by one - Pipe stitched - You need to give me pipes

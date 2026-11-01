@@ -15,7 +15,7 @@ namespace FreeVoiceConvert
 {
     static class Program
     {
-        public const int VERSION = 3;
+        public const int VERSION = 4;
         public const string SITE = "https://freevoiceconvert.pages.dev";
 
         [STAThread]
@@ -63,6 +63,14 @@ namespace FreeVoiceConvert
         readonly Label lblMsg = new Label { AutoSize = false, Dock = DockStyle.Fill, Text = "checking the engine", TextAlign = ContentAlignment.MiddleLeft };
         readonly TextBox txtLog = new TextBox { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Fill, Font = new Font("Consolas", 8f) };
         readonly LinkLabel lnkVersion = new LinkLabel { Text = "v" + Program.VERSION, AutoSize = true };
+        // one line of times (Marko, 1.11.2026): done / total · countdown · the clock time it ends · running time and fps
+        readonly Label lblStats = new Label { AutoSize = false, Dock = DockStyle.Fill, Height = 22, Font = new Font("Consolas", 10f, FontStyle.Bold), Text = "0:00 / 0:00" };
+        readonly Hair hCpu = new Hair("CPU"), hRam = new Hair("RAM", true), hGpu = new Hair("GPU"), hVram = new Hair("VRAM", true);
+        readonly SysMeters meters = new SysMeters();
+        readonly Timer tick = new Timer { Interval = 1000 };
+        double totalS, doneS, startedS, fps = 25;
+        DateTime? startedAt;
+        bool autoResumed;
 
         List<Profile> profiles = new List<Profile>();
         List<string> outputs = new List<string>();
@@ -72,8 +80,8 @@ namespace FreeVoiceConvert
         public MainForm()
         {
             Text = "Free Voice Convert Equalizer";
-            MinimumSize = new Size(380, 460);
-            Size = new Size(440, 540);
+            MinimumSize = new Size(480, 520);
+            Size = new Size(520, 600);
             Font = new Font("Segoe UI", 9.5f);
             try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
 
@@ -92,7 +100,7 @@ namespace FreeVoiceConvert
             root.Controls.Add(lstClips);
 
             var s2 = Row();
-            s2.Controls.Add(Step("②  HOW TO EXPORT")); s2.Controls.Add(rOne); s2.Controls.Add(rStitch); s2.Controls.Add(rBoth);
+            s2.Controls.Add(Step("②  HOW TO EXPORT")); s2.Controls.Add(rOne); s2.Controls.Add(Pipe()); s2.Controls.Add(rStitch); s2.Controls.Add(Pipe()); s2.Controls.Add(rBoth);
             root.Controls.Add(s2);
 
             var s3 = new TableLayoutPanel { Dock = DockStyle.Top, ColumnCount = 3, Height = 38 };
@@ -100,12 +108,23 @@ namespace FreeVoiceConvert
             s3.Controls.Add(step3, 0, 0); s3.Controls.Add(bar, 2, 0);
             root.Controls.Add(s3);
             root.Controls.Add(lblMsg);
+            root.Controls.Add(lblStats);
+            var ind = new TableLayoutPanel { Dock = DockStyle.Top, ColumnCount = 4, Height = 30 };
+            for (int i = 0; i < 4; i++) ind.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+            ind.Controls.Add(hCpu, 0, 0); ind.Controls.Add(hRam, 1, 0); ind.Controls.Add(hGpu, 2, 0); ind.Controls.Add(hVram, 3, 0);
+            root.Controls.Add(ind);
             root.Controls.Add(txtLog);
             txtLog.Visible = false;  // the installation shows it; a conversion does not
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            tick.Tick += (s, e) => { UpdateStats(); meters.Read(); hCpu.Set(meters.Cpu, $"{meters.Cpu * 100:0}%");
+                hRam.Set(meters.RamTotal > 0 ? meters.RamFree / meters.RamTotal : 0, Gb(meters.RamFree));
+                hGpu.Set(meters.Gpu, meters.Gpu < 0 ? "–" : $"{meters.Gpu * 100:0}%");
+                hVram.Set(meters.VramTotal > 0 ? meters.VramFree / meters.VramTotal : 0, meters.VramTotal > 0 ? Gb(meters.VramFree) : "–"); };
+            tick.Start();
 
             step1.Click += (s, e) => PickClips();
             step3.Click += (s, e) => { if (proc != null) Stop(); else if (ready) Convert(); };
@@ -157,6 +176,9 @@ namespace FreeVoiceConvert
         }
 
         static Label Step(string t) => new Label { Text = t, AutoSize = true, Font = new Font("Consolas", 10.5f, FontStyle.Bold), ForeColor = Color.ForestGreen, Padding = new Padding(0, 7, 10, 0) };
+
+        // choices on one line are parted by pipes (Marko, 1.11.2026)
+        static Label Pipe() => new Label { Text = "|", AutoSize = true, ForeColor = Color.Gray, Font = new Font("Consolas", 10.5f, FontStyle.Bold), Padding = new Padding(0, 4, 0, 0) };
 
         static FlowLayoutPanel Row() => new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true };
 
@@ -212,6 +234,13 @@ namespace FreeVoiceConvert
                     if (j.TryGetValue("pct", out var p)) bar.Value = Math.Max(0, Math.Min(1000, (int)(System.Convert.ToDouble(p) * 10)));
                     if (j.TryGetValue("msg", out var m)) { lblMsg.Text = m.ToString(); lblMsg.ForeColor = SystemColors.ControlText; }
                     if (j.TryGetValue("error", out var er)) { lblMsg.Text = er.ToString(); lblMsg.ForeColor = Color.Firebrick; }
+                    if (j.TryGetValue("total_s", out var ts)) totalS = System.Convert.ToDouble(ts);
+                    if (j.TryGetValue("fps", out var fp)) fps = System.Convert.ToDouble(fp);
+                    if (j.TryGetValue("done_s", out var ds))
+                    {
+                        doneS = System.Convert.ToDouble(ds);
+                        if (startedAt == null && j.ContainsKey("clip")) { startedAt = DateTime.Now; startedS = doneS; }
+                    }
                     if (j.TryGetValue("outputs", out var o) && o is System.Collections.ArrayList a && a.Count > 0)
                     { outputs = a.Cast<object>().Select(x => x.ToString()).ToList(); btnShow.Visible = true; }
                     return;
@@ -233,8 +262,17 @@ namespace FreeVoiceConvert
 
         void Check()
         {
-            if (!File.Exists(Python)) { SetReady(false, "not installed yet: press INSTALL (about 3 GB, once)"); return; }
-            Py("check", c => { SetReady(c == 0, c == 0 ? "ready" : "some parts are missing: press INSTALL"); if (c == 0) LoadProfiles(); });
+            // not complete: the installation goes on by itself from where it stopped (once per start; nothing is
+            // downloaded twice: curl -C -, uv's cache, Hugging Face's partial files)
+            if (!File.Exists(Python)) { SetReady(false, "installing"); Resume(); return; }
+            Py("check", c => { SetReady(c == 0, c == 0 ? "ready" : "some parts are missing"); if (c == 0) LoadProfiles(); else Resume(); });
+        }
+
+        void Resume()
+        {
+            if (autoResumed) { lblMsg.Text = "the installation stopped (see the log); press INSTALL to go on"; return; }
+            autoResumed = true;
+            Install();
         }
 
         void SetReady(bool r, string msg)
@@ -248,7 +286,7 @@ namespace FreeVoiceConvert
             txtLog.Clear(); txtLog.Visible = true; bar.Value = 0; lblMsg.Text = "installing";
             var ps = Path.Combine(Environment.SystemDirectory, @"WindowsPowerShell\v1.0\powershell.exe");
             Run(ps, "-NoProfile -ExecutionPolicy Bypass -File " + Q(Path.Combine(EngineDir, "setup.ps1")),
-                c => { if (c == 0) { txtLog.Visible = false; Check(); } else lblMsg.Text = "the installation stopped (see the log); press INSTALL to go on"; });
+                c => { if (c == 0) { txtLog.Visible = false; Check(); } else lblMsg.Text = "the installation stopped (see the log); it goes on by itself at the next start, or press INSTALL"; });
         }
 
         void LoadProfiles()
@@ -300,6 +338,7 @@ namespace FreeVoiceConvert
             if (!(cmbProfile.SelectedItem is Profile p)) { PickVoice(true); return; }  // no voice yet: asked once
             if (lstClips.Items.Count == 0) { lblMsg.Text = "add the clips first"; return; }
             outputs.Clear(); btnShow.Visible = false; txtLog.Clear(); bar.Value = 0;
+            totalS = doneS = startedS = 0; startedAt = null;
             var job = new Dictionary<string, object>
             {
                 ["clips"] = lstClips.Items.Cast<string>().ToList(),
@@ -318,6 +357,33 @@ namespace FreeVoiceConvert
                 try { File.Delete(path); } catch { }
                 if (c == 0 && outputs.Count > 0) Process.Start("explorer.exe", "/select,\"" + outputs[0] + "\"");
             });
+        }
+
+        static string Gb(double b) => $"{b / 1073741824.0:0.0} GB";
+        static string Clock(double sec)
+        {
+            var t = (int)Math.Max(0, Math.Round(sec));
+            return t >= 3600 ? $"{t / 3600}:{t / 60 % 60:00}:{t % 60:00}" : $"{t / 60}:{t % 60:00}";
+        }
+
+        void UpdateStats()
+        {
+            bool busy = proc != null;
+            var parts = new List<string> { $"{Clock(doneS)} / {Clock(totalS)}" };
+            if (busy && startedAt != null)
+            {
+                var el = (DateTime.Now - startedAt.Value).TotalSeconds;
+                if (doneS - startedS > 0.5 && el > 0)
+                {
+                    var rate = (doneS - startedS) / el;               // seconds of sound per second
+                    var left = Math.Max(0, (totalS - doneS) / rate);
+                    parts.Add("−" + Clock(left));
+                    parts.Add("ends " + DateTime.Now.AddSeconds(left).ToString("HH:mm"));
+                    parts.Add(Clock(el) + $"  {rate * fps:0.0} fps");  // frames per second at the clips' own rate
+                }
+                else parts.Add("−…");
+            }
+            lblStats.Text = string.Join("  ·  ", parts);
         }
 
         // ---------------------------------------------------------------- remembered choices

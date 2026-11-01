@@ -380,10 +380,18 @@ struct ContentView: View {
             stepTitle(2, "HOW TO EXPORT")
             HStack(spacing: 2) {
                 Word(text: "ONE BY ONE", lit: export == "individual") { export = "individual" }
+                pipe
                 Word(text: "STITCHED", lit: export == "stitched") { export = "stitched" }
+                pipe
                 Word(text: "BOTH", lit: export == "both") { export = "both" }
             }.padding(.leading, 26)
         }
+    }
+
+    // choices on one line are parted by pipes (Marko, 1.11.2026: "You need to give me pipes")
+    var pipe: some View {
+        Text("|").font(.system(size: 12, weight: .bold, design: .monospaced)).foregroundColor(.gray.opacity(0.6))
+            .accessibilityHidden(true)
     }
 
     var step3: some View {
