@@ -114,3 +114,9 @@ Every request, word for word, saved and pushed before any code.
 1. Every public app page in the order of MANTRA_MANIFEST modules/app-page-order.md: the banner (the app at work, name and one line on it), a short introduction with the download button and the version line, the lifestyle picture, the technical part, the donation bowl.
 
 **Status:** done 1.11.2026 (site/public/index.html, published by .github/workflows/site.yml): banner img/hero.jpg with the icon and the name on it, the introduction with both downloads and the version line (__VERSION__ kept, filled at deploy), the lifestyle picture img/lifestyle.jpg, the technical part (requirements, the five steps, how to use, nothing lost, installing), the bowl.
+
+## 1.11.2026: download links that follow every new version by themselves
+
+> "yes, fix download links so every website gets each new version by itself" (Marko, 1.11.2026)
+
+**Status:** in progress 1.11.2026 (MANTRA_MANIFEST modules/download-always-latest.md): fixed addresses download/FreeVoiceConvert.dmg and download/FreeVoiceConvert-Setup.exe, filled by the site workflow from the newest release.
