@@ -1,0 +1,36 @@
+# Site: https://freevoiceconvert.pages.dev on Cloudflare Pages. Runs when site/ changes, after every successful
+# "Build apps", or by hand. The newest release's .dmg and .exe are put next to the page (download/), so the page always
+# offers the latest build. Secrets (repository settings): CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID.
+name: Site
+on:
+  push:
+    branches: [main]
+    paths: [site/**, .github/workflows/site.yml]
+  workflow_run:
+    workflows: [Build apps]
+    types: [completed]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  deploy:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: The latest apps next to the page
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          mkdir -p site/public/download
+          if gh release view --json tagName >/dev/null 2>&1; then
+            gh release download --pattern '*.dmg' --pattern '*.exe' -D site/public/download --clobber
+          fi
+          V=$(sed -n 's/^let VERSION = \([0-9]*\)/\1/p' mac/App.swift)
+          ls -l site/public/download
+          sed -i "s/__VERSION__/$V/g" site/public/index.html
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy site/public --project-name=freevoiceconvert --branch=main --commit-dirty=true

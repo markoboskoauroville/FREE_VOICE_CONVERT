@@ -1,0 +1,314 @@
+#!/usr/bin/env python3
+"""fvc.py: the Free Voice Convert engine. The Mac and the Windows app both run this; it never opens a window.
+
+  fvc.py check                      are Python, Seed-VC and the models all here? (exit 1 if not)
+  fvc.py fetch                      download every model (the installer runs this)
+  fvc.py profile <audio> <name>     make a sound profile from a voice recording
+  fvc.py profiles                   the profiles, as JSON
+  fvc.py run <job.json>             convert, equalize, level, and export (one by one or stitched)
+
+Every line meant for the app starts with '@' and is JSON: {"pct": 0..100, "msg": "...", "clip": i} or
+{"done": true, "outputs": [...]} or {"error": "..."}. Anything else is a log line.
+
+The data folder: macOS ~/Library/Application Support/FreeVoiceConvert, Windows %LOCALAPPDATA%\\FreeVoiceConvert
+(FVC_HOME overrides). Inside: seed-vc/ (the code), models/ (the weights), profiles/, the Python environment.
+"""
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+import traceback
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+VERSION = 1
+
+
+def home():
+    if os.environ.get("FVC_HOME"):
+        return os.environ["FVC_HOME"]
+    if sys.platform == "win32":
+        return os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "FreeVoiceConvert")
+    if sys.platform == "darwin":
+        return os.path.expanduser("~/Library/Application Support/FreeVoiceConvert")
+    return os.path.expanduser("~/.local/share/FreeVoiceConvert")
+
+
+HOME = home()
+SEEDVC = os.path.join(HOME, "seed-vc")
+MODELS = os.path.join(HOME, "models")
+PROFILES = os.path.join(HOME, "profiles")
+os.environ.setdefault("HF_HUB_CACHE", os.path.join(MODELS, "checkpoints", "hf_cache"))
+os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
+
+# what `fetch` must leave behind (relative to MODELS/checkpoints, matched loosely)
+NEEDED = {
+    "speech": ["DiT_seed_v2_uvit_whisper_small_wavenet_bigvgan_pruned.pth", "bigvgan_v2_22khz_80band_256x"],
+    "studio": ["DiT_seed_v2_uvit_whisper_base_f0_44k_bigvgan_pruned_ft_ema_v2.pth", "bigvgan_v2_44khz_128band_512x",
+               "rmvpe.pt"],
+    "both": ["campplus_cn_common.bin", "whisper-small"],
+}
+
+
+def say(**kw):
+    print("@" + json.dumps(kw), flush=True)
+
+
+def ffmpeg():
+    import imageio_ffmpeg
+    return imageio_ffmpeg.get_ffmpeg_exe()
+
+
+def probe(path):
+    """(has_video, duration_s, width, height, fps) from ffmpeg's own banner."""
+    r = subprocess.run([ffmpeg(), "-hide_banner", "-i", path], capture_output=True, text=True, errors="replace")
+    t = r.stderr
+    dur = 0.0
+    m = re.search(r"Duration: (\d+):(\d+):(\d+\.\d+)", t)
+    if m:
+        dur = int(m[1]) * 3600 + int(m[2]) * 60 + float(m[3])
+    v = re.search(r"Stream #\S+.*Video: .*?(\d{2,5})x(\d{2,5})", t)
+    if v and "attached pic" in t[v.start():t.find("\n", v.start())]:
+        v = None  # a cover picture in an mp3 is not a video
+    fps = 30.0
+    f = re.search(r"(\d+(?:\.\d+)?) fps", t)
+    if f:
+        fps = float(f[1])
+    has_audio = bool(re.search(r"Stream #\S+.*Audio:", t))
+    return {"video": bool(v), "audio": has_audio, "dur": dur, "w": int(v[1]) if v else 0, "h": int(v[2]) if v else 0,
+            "fps": fps}
+
+
+def read_audio(path, sr=48000, clean=True):
+    import numpy as np
+    af = ["aresample=48000"]
+    if clean:  # rumble and steady noise away before the voice is read (the "Clear" we used in Resolve, gently)
+        af = ["highpass=f=70", "afftdn=nf=-25:tn=1"] + af
+    cmd = [ffmpeg(), "-v", "error", "-i", path, "-vn", "-ac", "1", "-af", ",".join(af), "-ar", str(sr),
+           "-f", "f32le", "-"]
+    raw = subprocess.run(cmd, capture_output=True, check=True).stdout
+    return np.frombuffer(raw, dtype=np.float32).copy(), sr
+
+
+def write_wav(path, x, sr):
+    import soundfile as sf
+    sf.write(path, x, sr, subtype="PCM_24")
+
+
+# ------------------------------------------------------------------------------------------------ commands
+def cmd_check():
+    ok = True
+    if not os.path.isfile(os.path.join(SEEDVC, "inference.py")):
+        print("missing: seed-vc code in", SEEDVC)
+        ok = False
+    ck = os.path.join(MODELS, "checkpoints")
+    found = []
+    for root, dirs, files in os.walk(ck):
+        found += files + dirs
+    blob = "\n".join(found)
+    for group, names in NEEDED.items():
+        for n in names:
+            if n not in blob:
+                print(f"missing ({group}): {n}")
+                ok = False
+    try:
+        import torch, transformers, librosa, pyloudnorm, imageio_ffmpeg  # noqa: F401
+        dev = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+        print(f"python {sys.version.split()[0]}, torch {torch.__version__} on {dev}, ffmpeg {ffmpeg()}")
+    except Exception as e:  # noqa: BLE001
+        print("missing python package:", e)
+        ok = False
+    print("ready" if ok else "not ready")
+    say(ready=ok)
+    return 0 if ok else 1
+
+
+def cmd_fetch():
+    """Load both models once: Seed-VC downloads everything it needs into MODELS."""
+    from seedvc_runner import SeedVC
+    for i, q in enumerate(["speech", "studio"]):
+        say(pct=50 + i * 25, msg=f"downloading the {q} model")
+        SeedVC(SEEDVC, MODELS, q, log=print)
+    import imageio_ffmpeg  # its ffmpeg binary comes with the wheel
+    say(pct=100, msg="all models here", done=True, outputs=[])
+    return cmd_check()
+
+
+def slug(s):
+    return re.sub(r"[^A-Za-z0-9_-]+", "_", s).strip("_") or "voice"
+
+
+def cmd_profile(audio, name):
+    import dsp
+    out = os.path.join(PROFILES, slug(name))
+    say(pct=10, msg=f"reading {os.path.basename(audio)}")
+    prof = dsp.make_profile(audio, out, name)
+    say(pct=100, msg=f"profile {name} ready", done=True, outputs=[out], profile=prof["name"])
+    return 0
+
+
+def cmd_profiles():
+    res = []
+    if os.path.isdir(PROFILES):
+        for d in sorted(os.listdir(PROFILES)):
+            p = os.path.join(PROFILES, d, "profile.json")
+            if os.path.isfile(p):
+                j = json.load(open(p))
+                res.append({"id": d, "name": j.get("name", d), "source": j.get("source", ""),
+                            "dir": os.path.join(PROFILES, d)})
+    print(json.dumps(res))
+    return 0
+
+
+def cmd_run(job_path):
+    """job: {"clips": [paths], "profile": id-or-dir, "voice": "convert"|"keep", "quality": "speech"|"studio",
+    "export": "individual"|"stitched"|"both", "outdir": path, "clean": true, "steps": 30, "lufs": -16}"""
+    import numpy as np
+    import dsp
+    job = json.load(open(job_path))
+    clips = job["clips"]
+    if not clips:
+        raise SystemExit("no clips")
+    pdir = job["profile"] if os.path.isdir(job["profile"]) else os.path.join(PROFILES, job["profile"])
+    prof = json.load(open(os.path.join(pdir, "profile.json")))
+    ref = os.path.join(pdir, "voice.wav")
+    outdir = job.get("outdir") or os.path.join(os.path.dirname(clips[0]), "Free Voice Convert")
+    os.makedirs(outdir, exist_ok=True)
+    convert = job.get("voice", "convert") == "convert"
+    export = job.get("export", "individual")
+    lufs = float(job.get("lufs", prof.get("lufs", -16)))
+    steps = int(job.get("steps", 30))
+    n = len(clips)
+
+    vc = None
+    if convert:
+        say(pct=1, msg="loading the voice model")
+        from seedvc_runner import SeedVC
+        vc = SeedVC(SEEDVC, MODELS, job.get("quality", "speech"), log=print)
+
+    infos, audios, outputs = [], [], []
+    t0 = time.time()
+    for i, clip in enumerate(clips):
+        base = 2 + 90 * i / n
+        span = 90 / n
+        info = probe(clip)
+        infos.append(info)
+        name = os.path.splitext(os.path.basename(clip))[0]
+        say(pct=round(base, 1), msg=f"{i + 1}/{n} {name}: reading", clip=i)
+        x, sr = read_audio(clip, clean=job.get("clean", True))
+        if convert:
+            def prog(f, i=i, base=base, span=span, name=name):
+                say(pct=round(base + span * 0.8 * f, 1), msg=f"{i + 1}/{n} {name}: the voice", clip=i)
+            y, ysr = vc.convert(x, sr, ref, steps=steps, progress=prog)
+            import librosa
+            y = librosa.resample(y, orig_sr=ysr, target_sr=48000).astype(np.float32)
+            y = y[: len(x)] if len(y) >= len(x) else np.pad(y, (0, len(x) - len(y)))  # frame by frame, same length
+        else:
+            y = x
+        say(pct=round(base + span * 0.85, 1), msg=f"{i + 1}/{n} {name}: the sound profile", clip=i)
+        y, _ = dsp.match_eq(y, 48000, prof["ltas"])
+        y = dsp.level(y, 48000, lufs)
+        audios.append(y)
+        if export in ("individual", "both"):
+            outputs.append(export_one(clip, info, y, outdir, name))
+        say(pct=round(base + span, 1), msg=f"{i + 1}/{n} {name}: done", clip=i)
+
+    if export in ("stitched", "both"):
+        say(pct=93, msg="stitching")
+        outputs.append(stitch(clips, infos, audios, outdir))
+    say(pct=100, msg=f"finished in {time.time() - t0:.0f} s", done=True, outputs=outputs)
+    return 0
+
+
+def export_one(clip, info, y, outdir, name):
+    wav = os.path.join(outdir, f"{name}_fvc.wav")
+    write_wav(wav, y, 48000)
+    if not info["video"]:
+        return wav
+    ext = os.path.splitext(clip)[1].lower()
+    ext = ext if ext in (".mp4", ".mov", ".m4v", ".mkv") else ".mp4"
+    out = os.path.join(outdir, f"{name}_fvc{ext}")
+    subprocess.run([ffmpeg(), "-y", "-v", "error", "-i", clip, "-i", wav, "-map", "0:v:0", "-map", "1:a:0",
+                    "-c:v", "copy", "-c:a", "aac", "-b:a", "320k", "-shortest", out], check=True)
+    os.remove(wav)
+    return out
+
+
+def fit(y, seconds, sr=48000):
+    import numpy as np
+    n = int(round(seconds * sr))
+    return y[:n] if len(y) >= n else np.pad(y, (0, n - len(y)))
+
+
+def stitch(clips, infos, audios, outdir):
+    import numpy as np
+    any_video = any(i["video"] for i in infos)
+    sr = 48000
+    if not any_video:
+        fade = int(0.01 * sr)
+        parts = []
+        for y in audios:
+            y = y.copy()
+            if len(y) > 2 * fade:
+                y[:fade] *= np.linspace(0, 1, fade)
+                y[-fade:] *= np.linspace(1, 0, fade)
+            parts.append(y)
+        out = os.path.join(outdir, "stitched_fvc.wav")
+        write_wav(out, np.concatenate(parts), sr)
+        return out
+    first = next(i for i in infos if i["video"])
+    W, H, FPS = first["w"] - first["w"] % 2, first["h"] - first["h"] % 2, first["fps"]
+    durs = [i["dur"] if i["dur"] > 0 else len(a) / sr for i, a in zip(infos, audios)]
+    wav = os.path.join(outdir, "stitched_fvc_audio.wav")
+    write_wav(wav, np.concatenate([fit(a, d) for a, d in zip(audios, durs)]), sr)
+    cmd, filt = [ffmpeg(), "-y", "-v", "error"], []
+    for k, (clip, info, d) in enumerate(zip(clips, infos, durs)):
+        if info["video"]:
+            cmd += ["-i", clip]
+        else:  # a sound without picture gets black picture of its length
+            cmd += ["-f", "lavfi", "-t", f"{d:.3f}", "-i", f"color=c=black:s={W}x{H}:r={FPS}"]
+        filt.append(f"[{k}:v]scale={W}:{H}:force_original_aspect_ratio=decrease,pad={W}:{H}:(ow-iw)/2:(oh-ih)/2,"
+                    f"setsar=1,fps={FPS},format=yuv420p,trim=duration={d:.3f},setpts=PTS-STARTPTS[v{k}]")
+    n = len(clips)
+    filt.append("".join(f"[v{k}]" for k in range(n)) + f"concat=n={n}:v=1:a=0[v]")
+    cmd += ["-i", wav, "-filter_complex", ";".join(filt), "-map", "[v]", "-map", f"{n}:a",
+            "-c:v", "libx264", "-crf", "18", "-preset", "medium", "-c:a", "aac", "-b:a", "320k", "-shortest",
+            os.path.join(outdir, "stitched_fvc.mp4")]
+    subprocess.run(cmd, check=True)
+    os.remove(wav)
+    return os.path.join(outdir, "stitched_fvc.mp4")
+
+
+def main(argv):
+    if not argv or argv[0] in ("-h", "--help", "help"):
+        print(__doc__)
+        return 0
+    c = argv[0]
+    try:
+        if c == "check":
+            return cmd_check()
+        if c == "fetch":
+            return cmd_fetch()
+        if c == "profile":
+            return cmd_profile(argv[1], argv[2] if len(argv) > 2 else os.path.splitext(os.path.basename(argv[1]))[0])
+        if c == "profiles":
+            return cmd_profiles()
+        if c == "run":
+            return cmd_run(argv[1])
+        if c == "version":
+            print(VERSION)
+            return 0
+        print("unknown command:", c)
+        return 2
+    except SystemExit:
+        raise
+    except Exception as e:  # noqa: BLE001
+        traceback.print_exc()
+        say(error=f"{type(e).__name__}: {e}")
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Free Voice Convert</title>
+<meta name="description" content="Free Voice Convert Equalizer: make every clip sound the same. Pick one voice, drop your clips, and every line comes out in that voice and that room, frame by frame. Free, offline, for Mac and Windows.">
+<meta property="og:title" content="Free Voice Convert: every clip, one voice, one room">
+<meta property="og:description" content="A free, offline studio-sound and voice equalizer for AI videos, phone recordings and podcasts. Mac and Windows.">
+<meta property="og:image" content="https://freevoiceconvert.pages.dev/icon-512.png">
+<link rel="icon" href="icon-512.png">
+<link rel="canonical" href="https://freevoiceconvert.pages.dev/">
+<meta name="robots" content="index, follow">
+<meta name="keywords" content="free voice converter, voice conversion, studio sound free, enhance speech free, AI video voice, voice equalizer, Seed-VC app, match voices, offline voice changer">
+<style>
+
+  :root {
+    --ground: #15171a; --raised: #1f2328; --line: #2c323a; --text: #e8eaed; --dim: #9aa0a6;
+    --amber: #e8a64b; --amber-ink: #1a1408; --green: #34d399;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ground); color: var(--text);
+         font: 17px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 56px 16px 40px; }
+  header { display: flex; gap: 20px; align-items: center; }
+  header img { width: 84px; height: 84px; flex: none; }
+  h1 { margin: 0; font-size: 40px; line-height: 1.1; letter-spacing: -0.5px; }
+  .by { color: var(--dim); font-size: 15px; margin-top: 4px; }
+  .lead { font-size: 21px; margin: 32px 0 8px; max-width: 760px; }
+  .hero { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 32px; align-items: start; margin: 28px 0 40px; }
+  .shot { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #000; }
+  .shot img { display: block; width: 100%; height: auto; }
+  .caption { color: var(--dim); font-size: 14px; margin: 8px 0 0; }
+  .actions { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin: 18px 0 8px; }
+  .btn { display: inline-flex; align-items: center; gap: 10px; padding: 14px 22px; border-radius: 12px;
+         background: var(--amber); color: var(--amber-ink); font-weight: 700; text-decoration: none; font-size: 17px; }
+  .btn:hover { filter: brightness(1.06); }
+  .small { color: var(--dim); font-size: 14px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 44px; }
+  .card { background: var(--raised); border: 1px solid var(--line); border-radius: 16px; padding: 20px 20px 18px; }
+  .card h3 { margin: 0 0 6px; font-size: 18px; }
+  .card p { margin: 0; color: var(--dim); font-size: 15px; }
+  h2 { font-size: 24px; margin: 0 0 14px; }
+  ol { padding-left: 22px; margin: 0 0 44px; }
+  ol li { margin: 8px 0; }
+  code, pre { background: var(--raised); border: 1px solid var(--line); border-radius: 6px; font-size: 15px; }
+  code { padding: 1px 6px; }
+  pre { padding: 16px 18px; overflow-x: auto; margin: 0 0 44px; line-height: 1.5; }
+  kbd { background: var(--raised); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 6px; padding: 1px 7px; font-size: 14px; }
+  table { border-collapse: collapse; margin: 0 0 44px; width: 100%; }
+  td { padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td:first-child { white-space: nowrap; color: var(--amber); }
+  footer { border-top: 1px solid var(--line); padding-top: 18px; color: var(--dim); font-size: 14px;
+           display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; }
+  footer a { color: var(--dim); }
+  @media (max-width: 760px) { .hero { grid-template-columns: 1fr; } .hero .shot { max-width: 360px; } }
+  @media (max-width: 560px) {
+    main { padding-top: 32px; } h1 { font-size: 30px; } header img { width: 64px; height: 64px; } .lead { font-size: 18px; }
+  }
+
+  .flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin: 0 0 44px; }
+  .step { background: var(--raised); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .step b { display: block; color: var(--amber); font-size: 13px; letter-spacing: .08em; }
+  .step span { color: var(--dim); font-size: 15px; }
+  .dl { display: flex; flex-wrap: wrap; gap: 14px; margin: 18px 0 6px; }
+  .btn.alt { background: var(--raised); color: var(--text); border: 1px solid var(--line); }
+</style>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Free Voice Convert Equalizer","url":"https://freevoiceconvert.pages.dev/","applicationCategory":"MultimediaApplication","operatingSystem":"macOS 14+ (Apple Silicon), Windows 10/11","softwareVersion":"__VERSION__","offers":{"@type":"Offer","price":"0","priceCurrency":"EUR"},"description":"Pick one voice, drop your clips, every clip comes out in that voice and that room, frame by frame. Free and offline."}</script>
+</head>
+<body>
+<main>
+  <header>
+    <img src="icon-512.png" alt="Free Voice Convert icon">
+    <div>
+      <h1>Free Voice Convert</h1>
+      <div class="by">Free Voice Convert Equalizer · version __VERSION__ · by Marko Mantra</div>
+    </div>
+  </header>
+
+  <p class="lead">Recorded in a kitchen, a car and a hall? Pick one voice, drop the clips in, and every clip comes out in
+  that voice and that room. Same timing, frame by frame, so the lips still match.</p>
+
+  <div class="dl">
+    <a class="btn" href="download/FreeVoiceConvert-__VERSION__.dmg" data-dl-app="freevoiceconvert-mac" download>Download for Mac</a>
+    <a class="btn alt" href="download/FreeVoiceConvert-__VERSION__-Setup.exe" data-dl-app="freevoiceconvert-win" download>Download for Windows</a>
+  </div>
+  <p class="small">Mac: Apple Silicon (M1 or newer), macOS 14+. Windows 10/11, 64-bit; an NVIDIA card makes it much faster.
+  The installation downloads the voice models once (about 3 GB). After that it works offline. Nothing leaves your computer.</p>
+
+  <h2 style="margin-top:44px">What it does to every clip</h2>
+  <div class="flow">
+    <div class="step"><b>1 · CLEAN</b><span>Rumble and steady noise out, gently.</span></div>
+    <div class="step"><b>2 · VOICE</b><span>Seed-VC turns the speech into your chosen voice. The length stays the same, frame by frame.</span></div>
+    <div class="step"><b>3 · PROFILE</b><span>The sound of your reference recording, its microphone and room, laid over the clip as an EQ curve.</span></div>
+    <div class="step"><b>4 · LEVEL</b><span>Every clip at the same loudness (−16 LUFS), peaks held under −1 dB.</span></div>
+    <div class="step"><b>5 · EXPORT</b><span>One file per clip, or everything stitched into one. Video keeps its picture.</span></div>
+  </div>
+
+  <h2>How to use it</h2>
+  <ol>
+    <li><b>SOURCE VOICE</b>: pick a clean recording of the voice every clip should have (10–30 seconds of speech).
+      Tip: run it through a speech enhancer first. The cleaner the reference, the more "studio" every clip sounds.</li>
+    <li><b>ADD FILES</b>: drop audio or video clips. Drag them into order; that order is also the stitch order.</li>
+    <li>Choose <b>CONVERT</b> (the voice changes to the reference) or <b>KEEP</b> (the speaker stays, only the sound is matched),
+      <b>SPEECH</b> or <b>STUDIO</b> quality, and <b>ONE BY ONE</b>, <b>STITCHED</b> or <b>BOTH</b>.</li>
+    <li>Press <b>CONVERT</b>. The results go into a "Free Voice Convert" folder next to your first clip.</li>
+  </ol>
+
+  <h2>Installing</h2>
+  <div class="grid">
+    <div class="card"><h3>Mac</h3><p>Open the .dmg and drag the app to Applications. The first time, macOS asks: System Settings › Privacy &amp; Security › <b>Open Anyway</b> (the app is signed by its author, not through Apple's paid program). At its first start it downloads the models itself.</p></div>
+    <div class="card"><h3>Windows</h3><p>Run the Setup. If SmartScreen warns, press <b>More info › Run anyway</b>. The installer opens a window that downloads Python, torch, Seed-VC and the models. When it closes, the app is ready.</p></div>
+    <div class="card"><h3>Free and open</h3><p>GPL-3.0. Voice conversion by <a href="https://github.com/Plachtaa/seed-vc" style="color:var(--amber)">Seed-VC</a> (Plachtaa), vocoder BigVGAN (NVIDIA), speech features Whisper (OpenAI). No account, no upload, no subscription.</p></div>
+  </div>
+</main>
+<!-- THE MANTRA PAYMENT GATEWAY, the donation bowl (MANTRA_MANIFEST modules/donation-bowl.md, payment-links.md).
+     Step 1, on the page: only the title and the Tibetan bowl (a photoreal Nano Banana Pro render).
+     Step 2, after a tap: the bowl rings (a singing bowl synthesised in the browser, nothing downloaded), fades away, and
+     the giving panel takes its place: a "Give with Revolut" button, his Revolut QR code, a way back to the bowl.
+     Paste this block into the page; put tibetan-bowl.jpg and revolut-qr.png in the page's img/ folder.
+     Self-contained: its own styles (scoped to .mantra-bowl) and script; no library, no tracking. -->
+<section class="mantra-bowl" data-revolut="https://revolut.me/mbosko0612" aria-label="Support Marko Mantra">
+  <style>
+    .mantra-bowl { --brass: #f3c97a; --glow: rgba(255, 196, 120, .45); --card: #292c2f; text-align: center; padding: 64px 16px; }
+    .mantra-bowl h2 { margin: 0 0 26px; }
+    .mantra-bowl .stage { position: relative; display: grid; place-items: center; min-height: 380px; aspect-ratio: auto; background: none; overflow: visible; border-radius: 0; }
+    .mantra-bowl .stage > * { grid-area: 1 / 1; transition: opacity .9s ease, transform .9s ease; }
+    .mantra-bowl .bowl { background: none; border: 0; padding: 0; cursor: pointer; position: relative; color: inherit; font: inherit; -webkit-tap-highlight-color: transparent; }
+    .mantra-bowl .bowl:focus-visible { outline: 2px solid var(--brass); outline-offset: 8px; border-radius: 24px; }
+    .mantra-bowl .bowl img { width: min(360px, 82vw); height: auto; display: block; border-radius: 24px; transition: transform .4s ease, filter .4s ease; }
+    .mantra-bowl .hint { display: block; margin-top: 16px; font-size: 15px; letter-spacing: .06em; opacity: .75; }
+    .mantra-bowl .bowl:hover img { transform: translateY(-3px); filter: brightness(1.08); }
+    .mantra-bowl .ring { position: absolute; left: 50%; top: 36%; width: 60%; aspect-ratio: 3 / 1; border: 2px solid var(--glow); border-radius: 50%;
+      transform: translate(-50%, -50%) scale(.6); opacity: 0; pointer-events: none; }
+    .mantra-bowl.ringing .ring { animation: mantra-bowl-ring 2.4s ease-out forwards; }
+    .mantra-bowl.ringing .ring.r2 { animation-delay: .5s; }
+    .mantra-bowl.ringing .ring.r3 { animation-delay: 1s; }
+    @keyframes mantra-bowl-ring { 0% { opacity: .9; transform: translate(-50%, -50%) scale(.6); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(2.2); } }
+    /* step 2: the bowl gives way to the panel */
+    .mantra-bowl.giving .bowl { opacity: 0; transform: scale(.94); pointer-events: none; }
+    .mantra-bowl .panel { opacity: 0; transform: translateY(14px); pointer-events: none; width: min(420px, 92vw); }
+    .mantra-bowl.giving .panel { opacity: 1; transform: none; pointer-events: auto; transition-delay: .35s; }
+    .mantra-bowl .give { display: inline-flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 18px 22px; border-radius: 999px;
+      background: linear-gradient(90deg, #f3c97a, #fff0c4, #f3c97a); color: #1a1206; font-weight: 700; font-size: 17px; text-decoration: none;
+      box-shadow: 0 0 30px var(--glow); box-sizing: border-box; }
+    .mantra-bowl .qr { margin: 22px auto 0; background: var(--card); border-radius: 22px; padding: 22px; width: min(260px, 70vw); box-sizing: border-box; }
+    .mantra-bowl .qr img { width: 100%; height: auto; display: block; }
+    .mantra-bowl .small { font-size: 14px; opacity: .7; margin: 14px 0 0; }
+    .mantra-bowl .back { background: none; border: 0; color: inherit; opacity: .6; font-size: 14px; margin-top: 18px; cursor: pointer; text-decoration: underline; }
+    @media (prefers-reduced-motion: reduce) { .mantra-bowl.ringing .ring { animation: none; } .mantra-bowl .stage > * { transition: none; } }
+  </style>
+  <h2>Put something in the bowl</h2>
+  <div class="stage">
+    <button type="button" class="bowl" aria-label="Ring the bowl to give">
+      <span class="ring"></span><span class="ring r2"></span><span class="ring r3"></span>
+      <img src="img/tibetan-bowl.jpg" alt="A Tibetan singing bowl on a red cushion, coins inside" width="900" height="900">
+      <span class="hint">Click on the bowl to donate</span>
+    </button>
+    <div class="panel" aria-hidden="true">
+      <a class="give" href="https://revolut.me/mbosko0612" target="_blank" rel="noopener">Give with Revolut →</a>
+      <p class="small">Any amount, by card or Revolut. No Revolut account needed. It goes straight to Marko.</p>
+      <div class="qr"><img src="img/revolut-qr.png" alt="Revolut QR code for @mbosko0612" width="620" height="760"></div>
+      <p class="small">On a computer? Scan it with your phone.</p>
+      <button type="button" class="back">back to the bowl</button>
+    </div>
+  </div>
+  <script>
+  (() => {
+    const box = document.currentScript.closest('.mantra-bowl');
+    const bowl = box.querySelector('.bowl'), panel = box.querySelector('.panel');
+    box.querySelector('.give').href = box.dataset.revolut;
+    // A singing bowl's voice: a low fundamental with inharmonic partials (about 1, 2.76, 5.4, 8.9 times), each a pair a
+    // few tenths of a hertz apart so the tone beats, a soft strike and a long fading hum.
+    function ring() {
+      const Ctx = window.AudioContext || window.webkitAudioContext; if (!Ctx) return;
+      const ac = new Ctx(), now = ac.currentTime, out = ac.createGain();
+      out.gain.value = 0.32; out.connect(ac.destination);
+      [[1, 1, 9], [2.76, .5, 6], [5.4, .25, 4], [8.93, .12, 2.5]].forEach(([k, amp, dur]) => {
+        [0, 0.6].forEach(detune => {
+          const o = ac.createOscillator(), g = ac.createGain();
+          o.type = 'sine'; o.frequency.value = 196 * k + detune;
+          g.gain.setValueAtTime(0, now);
+          g.gain.linearRampToValueAtTime(amp / 2, now + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+          o.connect(g); g.connect(out); o.start(now); o.stop(now + dur + 0.1);
+        });
+      });
+      setTimeout(() => ac.close(), 10000);
+    }
+    bowl.addEventListener('click', () => {
+      ring();
+      box.classList.remove('ringing'); void box.offsetWidth; box.classList.add('ringing');
+      // the bowl sounds first, then gives way to the panel
+      setTimeout(() => { box.classList.add('giving'); panel.setAttribute('aria-hidden', 'false'); bowl.setAttribute('aria-hidden', 'true'); }, 1300);
+    });
+    box.querySelector('.back').addEventListener('click', () => {
+      box.classList.remove('giving', 'ringing'); panel.setAttribute('aria-hidden', 'true'); bowl.removeAttribute('aria-hidden');
+    });
+  })();
+  </script>
+</section>
+<main style="padding-top:0">
+  <footer>
+    <span>Free Voice Convert Equalizer __VERSION__ · Marko Mantra · <a href="https://markobosko.pages.dev">markobosko.pages.dev</a></span>
+    <span>Use only voices you have the right to use.</span>
+  </footer>
+</main>
+<script src="https://mantra-downloads.marko-bosko-925.workers.dev/counter.js" defer></script>
+<script src="https://mantra-visits.marko-bosko-925.workers.dev/counter.js" defer></script>
+<script src="https://speechifykeys.pages.dev/speechify-keys.js" defer></script>
+</body>
+</html>

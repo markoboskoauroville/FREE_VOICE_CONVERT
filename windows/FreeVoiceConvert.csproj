@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>FreeVoiceConvert</AssemblyName>
+    <RootNamespace>FreeVoiceConvert</RootNamespace>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
+    <Version>1.0.0</Version>
+    <Product>Free Voice Convert Equalizer</Product>
+    <Company>Mantra Productions</Company>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System.Web.Extensions" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,55 @@
+# Build apps: the Mac app (.dmg) and the Windows installer (.exe) on GitHub's machines, at every push that touches them.
+# The version is the one number in mac/App.swift (whole numbers: v1, v2, v3). A new number makes a new release
+# "v<N>"; the same number replaces the files of that release. The site workflow then puts them on the website.
+name: Build apps
+on:
+  push:
+    branches: [main]
+    paths: [mac/**, windows/**, engine/**, .github/workflows/build.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  mac:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the app and the disk image
+        run: |
+          ./mac/build.sh
+          ./mac/tools/make_dmg.sh
+      - uses: actions/upload-artifact@v4
+        with: { name: mac, path: mac/build/FreeVoiceConvert-*.dmg }
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the app (.NET Framework 4.8, no runtime to install)
+        run: dotnet build windows/FreeVoiceConvert.csproj -c Release
+      - name: Make the installer (Inno Setup 6)
+        shell: pwsh
+        run: |
+          $v = (Select-String -Path mac/App.swift -Pattern '^let VERSION = (\d+)').Matches[0].Groups[1].Value
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          & $iscc /Qp "/DAppVersion=$v" windows/installer.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with: { name: windows, path: dist/FreeVoiceConvert-*-Setup.exe }
+  release:
+    needs: [mac, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: out, merge-multiple: true }
+      - name: Release v<N>
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          V=$(sed -n 's/^let VERSION = \([0-9]*\)/\1/p' mac/App.swift)
+          ls -l out
+          if gh release view "v$V" >/dev/null 2>&1; then
+            gh release upload "v$V" out/* --clobber
+          else
+            gh release create "v$V" out/* --title "Free Voice Convert Equalizer $V" --notes "Mac (Apple Silicon) and Windows 10/11. The models are downloaded during the installation. https://freevoiceconvert.pages.dev"
+          fi
