@@ -106,3 +106,11 @@ Every request, word for word, saved and pushed before any code.
 
 > please, with the pipe next to add files, add also new task button so user can reset the user interface to be clear and
 > then add files. Without that, he's just adding more and more files
+
+## 1.11.2026: the page order (banner, introduction, lifestyle, technical, donation)
+
+> "the page is perfect. Let's do it all pages" (Marko, 1.11.2026, about mantramiditools.pages.dev)
+
+1. Every public app page in the order of MANTRA_MANIFEST modules/app-page-order.md: the banner (the app at work, name and one line on it), a short introduction with the download button and the version line, the lifestyle picture, the technical part, the donation bowl.
+
+**Status:** done 1.11.2026 (site/public/index.html, published by .github/workflows/site.yml): banner img/hero.jpg with the icon and the name on it, the introduction with both downloads and the version line (__VERSION__ kept, filled at deploy), the lifestyle picture img/lifestyle.jpg, the technical part (requirements, the five steps, how to use, nothing lost, installing), the bowl.

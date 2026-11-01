@@ -41,6 +41,15 @@
   .card h3 { margin: 0 0 6px; font-size: 18px; }
   .card p { margin: 0; color: var(--dim); font-size: 15px; }
   h2 { font-size: 24px; margin: 0 0 14px; }
+  /* the page order (MANTRA_MANIFEST app-page-order.md): banner, introduction, lifestyle, technical, donation */
+  .banner { position: relative; border-radius: 18px; overflow: hidden; margin: 0 0 28px; background: #000; }
+  .banner > img { display: block; width: 100%; height: auto; aspect-ratio: 1024 / 572; object-fit: cover; }
+  .banner .over { position: absolute; left: 0; right: 0; bottom: 0; padding: 60px 26px 22px;
+                  background: linear-gradient(transparent, rgba(0,0,0,.82)); display: flex; gap: 18px; align-items: center; }
+  .banner .over img { width: 64px; height: 64px; flex: none; }
+  .life { border-radius: 18px; overflow: hidden; margin: 8px 0 44px; }
+  .life img { display: block; width: 100%; height: auto; }
+  @media (max-width: 600px) { h1 { font-size: 28px; } .banner .over { position: static; background: var(--raised); padding: 16px; } }
   ol { padding-left: 22px; margin: 0 0 44px; }
   ol li { margin: 8px 0; }
   code, pre { background: var(--raised); border: 1px solid var(--line); border-radius: 6px; font-size: 15px; }
@@ -69,14 +78,19 @@
 </head>
 <body>
 <main>
-  <header>
-    <img src="icon-512.png" alt="Free Voice Convert icon">
-    <div>
-      <h1>Free Voice Convert</h1>
-      <div class="by">Free Voice Convert Equalizer · version __VERSION__ · by Marko Mantra</div>
+  <!-- 1. the banner: the app at work -->
+  <div class="banner">
+    <img src="img/hero.jpg" alt="An editing desk at dusk: a microphone on an arm, and a monitor showing the same presenter in a kitchen, a car and a hall above one clean, even waveform" width="1024" height="572">
+    <div class="over">
+      <img src="icon-512.png" alt="Free Voice Convert icon">
+      <div>
+        <h1>Free Voice Convert</h1>
+        <div class="by">Free Voice Convert Equalizer · version __VERSION__ · by Marko Mantra</div>
+      </div>
     </div>
-  </header>
+  </div>
 
+  <!-- 2. the introduction -->
   <p class="lead">Recorded in a kitchen, a car and a hall? Pick one voice, drop the clips in, and every clip comes out in
   that voice and that room. Same timing, frame by frame, so the lips still match.</p>
 
@@ -84,10 +98,17 @@
     <a class="btn" href="download/FreeVoiceConvert-__VERSION__.dmg" data-dl-app="freevoiceconvert-mac" download>Download for Mac</a>
     <a class="btn alt" href="download/FreeVoiceConvert-__VERSION__-Setup.exe" data-dl-app="freevoiceconvert-win" download>Download for Windows</a>
   </div>
-  <p class="small">Mac: Apple Silicon (M1 or newer), macOS 14+. Windows 10/11, 64-bit; an NVIDIA card makes it much faster.
+  <p class="small">Version __VERSION__ · Mac (Apple Silicon, macOS 14+) and Windows 10/11 · free, offline, nothing leaves your computer</p>
+
+  <!-- 3. the lifestyle picture -->
+  <div class="life" style="margin-top:28px"><img src="img/lifestyle.jpg" alt="A laughing woman films herself from the driver's seat of a parked car, her phone on a small mount at the windscreen, a country road behind her" width="1024" height="765" loading="lazy"></div>
+
+  <!-- 4. the technical part -->
+  <h2>Requirements</h2>
+  <p class="small" style="font-size:16px;margin:0 0 44px">Mac: Apple Silicon (M1 or newer), macOS 14+. Windows 10/11, 64-bit; an NVIDIA card makes it much faster.
   The installation downloads the voice models once (about 3 GB). After that it works offline. Nothing leaves your computer.</p>
 
-  <h2 style="margin-top:44px">What it does to every clip</h2>
+  <h2>What it does to every clip</h2>
   <div class="flow">
     <div class="step"><b>1 · CLEAN</b><span>Rumble and steady noise out, gently.</span></div>
     <div class="step"><b>2 · VOICE</b><span>Seed-VC turns the speech into your chosen voice. The length stays the same, frame by frame.</span></div>
@@ -116,6 +137,7 @@
     <div class="card"><h3>Free and open</h3><p>GPL-3.0. Voice conversion by <a href="https://github.com/Plachtaa/seed-vc" style="color:var(--amber)">Seed-VC</a> (Plachtaa), vocoder BigVGAN (NVIDIA), speech features Whisper (OpenAI). No account, no upload, no subscription.</p></div>
   </div>
 </main>
+<!-- 5. the donation bowl -->
 <!-- THE MANTRA PAYMENT GATEWAY, the donation bowl (MANTRA_MANIFEST modules/donation-bowl.md, payment-links.md).
      Step 1, on the page: only the title and the Tibetan bowl (a photoreal Nano Banana Pro render).
      Step 2, after a tap: the bowl rings (a singing bowl synthesised in the browser, nothing downloaded), fades away, and
