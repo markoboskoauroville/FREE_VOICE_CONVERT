@@ -37,3 +37,14 @@ Every request, word for word, saved and pushed before any code.
 > to transcribe, and then match the timings between the original and the new voice. Basically we recreate the voice from
 > scratch, fitting the original source frame by frame. We are just converting one voice into another, which means
 > copying the Adobe Podcast product for free.
+
+## 1.11.2026, later: statistics, countdown, CPU/GPU/RAM meters, volume meters
+
+> in the voice convert, I am missing the statistics when we are converting, where we are in time now and also the
+> estimated time of finishing. For example, I have 5 files. You need to add all its length. Let's say it's 5 minutes.
+> Then down there you have a counter: 5 minutes. Actually, you make a counter where we are in conversion: 5 minutes, and
+> estimated time. You put the time of the clock, and also a timer that goes backwards. For example, if it needs 1 hour,
+> then we just go backwards. You also need to show at what time it finishes also show GPU and CPU status: how much is
+> under load in this computer or Windows computer? Imagine my meters in my application, TTT Mini, which is going
+> horizontal. On one side is CPU, and on the other is GPU. They are just showing the current status. Also, two more:
+> memory available (RAM) and GPU memory available. Also, volmeters. Make it happen
