@@ -42,6 +42,7 @@ MODELS = os.path.join(HOME, "models")
 PROFILES = os.path.join(HOME, "profiles")
 os.environ.setdefault("HF_HUB_CACHE", os.path.join(MODELS, "checkpoints", "hf_cache"))
 os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
+os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")  # BigVGAN has a conv too long for MPS: that op runs on the CPU
 
 # what `fetch` must leave behind (relative to MODELS/checkpoints, matched loosely)
 NEEDED = {

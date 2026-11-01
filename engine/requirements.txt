@@ -13,4 +13,4 @@ pyyaml
 matplotlib
 tqdm
 pyloudnorm==0.1.1
-imageio-ffmpeg==0.5.1
+imageio-ffmpeg==0.6.0

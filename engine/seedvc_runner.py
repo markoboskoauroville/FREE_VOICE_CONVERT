@@ -40,11 +40,20 @@ class SeedVC:
         (self.model, self.semantic_fn, self.f0_fn, self.vocoder_fn, self.campplus, self.mel_fn,
          self.mel_args) = inf.load_models(args)
         self.sr = self.mel_args["sampling_rate"]
+        # BigVGAN's long 1-D convolutions exceed an MPS limit ("Output channels > 65536"): the vocoder runs on the CPU
+        self.voc_device = self.device
+        if self.device.type == "mps":
+            self.vocoder_fn = self.vocoder_fn.to("cpu")
+            self.voc_device = inf.torch.device("cpu")
         log(f"model ready in {time.time() - t:.1f} s ({self.sr} Hz)")
         self._ref_key = None
 
     # --- the reference voice (the profile), prepared once per profile ---
     def _prepare_ref(self, ref_path):
+        with self.torch.no_grad():
+            return self._prepare_ref_ng(ref_path)
+
+    def _prepare_ref_ng(self, ref_path):
         if self._ref_key == ref_path:
             return
         import librosa
@@ -60,7 +69,7 @@ class SeedVC:
         style2 = self.campplus(feat2.unsqueeze(0))
         F0_ori = None
         if self.f0:
-            F0_ori = torch.from_numpy(self.f0_fn(ref16[0], thred=0.03)).to(self.device)[None]
+            F0_ori = torch.from_numpy(self.f0_fn(ref16[0], thred=0.03)).float().to(self.device)[None]
         target2_lengths = torch.LongTensor([mel2.size(2)]).to(mel2.device)
         prompt_condition, *_ = self.model.length_regulator(S_ori, ylens=target2_lengths, n_quantizers=3, f0=F0_ori)
         self.ref = SimpleNamespace(mel2=mel2, style2=style2, F0_ori=F0_ori, prompt=prompt_condition)
@@ -68,6 +77,10 @@ class SeedVC:
 
     # --- one clip: samples in (any rate, mono float32), samples out at self.sr ---
     def convert(self, wave, wave_sr, ref_path, steps=30, cfg_rate=0.7, progress=None):
+        with self.torch.no_grad():  # Seed-VC's own main() runs under no_grad
+            return self._convert(wave, wave_sr, ref_path, steps, cfg_rate, progress)
+
+    def _convert(self, wave, wave_sr, ref_path, steps=30, cfg_rate=0.7, progress=None):
         import librosa
         torch, inf = self.torch, self.inf
         self._prepare_ref(ref_path)
@@ -102,7 +115,7 @@ class SeedVC:
 
         shifted_f0 = None
         if self.f0:
-            F0_alt = torch.from_numpy(self.f0_fn(w16[0], thred=0.03)).to(self.device)[None]
+            F0_alt = torch.from_numpy(self.f0_fn(w16[0], thred=0.03)).float().to(self.device)[None]
             F0_ori = self.ref.F0_ori
             log_alt = torch.log(F0_alt + 1e-5)
             shifted = log_alt.clone()
@@ -127,7 +140,7 @@ class SeedVC:
                 vc = self.model.cfm.inference(cat, torch.LongTensor([cat.size(1)]).to(mel2.device), mel2, style2,
                                               None, steps, inference_cfg_rate=cfg_rate)
                 vc = vc[:, :, mel2.size(-1):]
-            w = self.vocoder_fn(vc.float()).squeeze()[None, :]
+            w = self.vocoder_fn(vc.float().to(self.voc_device)).squeeze()[None, :]
             if processed == 0:
                 if last:
                     chunks.append(w[0].cpu().numpy())
