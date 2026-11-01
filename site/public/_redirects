@@ -1,0 +1,3 @@
+# Old versioned download addresses go to the fixed ones (modules/download-always-latest.md). The .exe line first.
+/download/FreeVoiceConvert-*-Setup.exe /download/FreeVoiceConvert-Setup.exe 301
+/download/FreeVoiceConvert-*.dmg /download/FreeVoiceConvert.dmg 301
