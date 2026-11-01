@@ -48,3 +48,4 @@ Every request, word for word, saved and pushed before any code.
 > under load in this computer or Windows computer? Imagine my meters in my application, TTT Mini, which is going
 > horizontal. On one side is CPU, and on the other is GPU. They are just showing the current status. Also, two more:
 > memory available (RAM) and GPU memory available. Also, volmeters. Make it happen
+> (Marko, right after: "VU METERS ... THAT WAS MISSSPELET BY SPEACH TO TEXT": volmeters = VU meters.)
