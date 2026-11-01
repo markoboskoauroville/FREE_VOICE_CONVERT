@@ -28,6 +28,11 @@ jobs:
           V=$(sed -n 's/^let VERSION = \([0-9]*\)/\1/p' mac/App.swift)
           ls -l site/public/download
           sed -i "s/__VERSION__/$V/g" site/public/index.html
+      - name: The Pages project (made the first time, then it already exists)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@3 pages project create freevoiceconvert --production-branch main || true
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
