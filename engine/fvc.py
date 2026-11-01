@@ -220,7 +220,9 @@ def cmd_run(job_path):
     pre = [probe(c) for c in clips]
     total_s = sum(p["dur"] for p in pre)  # the whole length: the counter and the estimate count in these seconds
     done_before = 0.0
-    say(pct=2, msg=f"{n} files, {total_s:.1f} s of sound", total_s=round(total_s, 2), done_s=0)
+    # the speed is told in frames per second: the clips' own frame rate (the first video's), 25 for sound only
+    fps = next((p["fps"] for p in pre if p["video"]), 25.0)
+    say(pct=2, msg=f"{n} files, {total_s:.1f} s of sound", total_s=round(total_s, 2), done_s=0, fps=fps)
     for i, clip in enumerate(clips):
         base = 2 + 90 * i / n
         span = 90 / n
@@ -250,26 +252,14 @@ def cmd_run(job_path):
         if export in ("individual", "both"):
             outputs.append(export_one(clip, info, y, sr, outdir, name))
         done_before += info["dur"]
-        # the VU meters: 20 readings a second of the clip before (in) and after (out), in dBFS
         say(pct=round(base + span, 1), msg=f"{i + 1}/{n} {name}: done", clip=i, total_s=round(total_s, 2),
-            done_s=round(done_before, 2), vu_in=envelope(x, sr), vu_out=envelope(y, sr))
+            done_s=round(done_before, 2))
 
     if export in ("stitched", "both"):
         say(pct=93, msg="stitching")
         outputs.append(stitch(clips, infos, audios, outdir))
     say(pct=100, msg=f"finished in {time.time() - t0:.0f} s", done=True, outputs=outputs)
     return 0
-
-
-def envelope(x, sr, rate=20):
-    import numpy as np
-    m = np.abs(x).max(axis=1) if x.ndim == 2 else np.abs(x)
-    hop = max(1, sr // rate)
-    n = len(m) // hop
-    if n == 0:
-        return []
-    peaks = m[: n * hop].reshape(n, hop).max(axis=1)
-    return [round(float(v), 1) for v in 20 * np.log10(np.maximum(peaks, 1e-5))]
 
 
 def video_out(clip):

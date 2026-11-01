@@ -45,9 +45,7 @@ final class Engine: ObservableObject {
     @Published var doneS: Double = 0        // how much of it is converted
     @Published var startedAt: Date?         // when the first second was converted (the model's loading is not counted)
     @Published var startedS: Double = 0
-    @Published var vuIn: [Double] = []      // the last finished clip, 20 readings a second, before and after
-    @Published var vuOut: [Double] = []
-    @Published var vuStart = Date()
+    @Published var fps: Double = 25         // the clips' frame rate (25 for sound only): the speed is frames per second
     private var proc: Process?
 
     func run(_ exe: URL, _ args: [String], done: @escaping (Int32) -> Void) {
@@ -90,11 +88,11 @@ final class Engine: ObservableObject {
             if let e = j["error"] as? String { error = e; msg = e }
             if let o = j["outputs"] as? [String], !o.isEmpty { outputs = o }
             if let t = j["total_s"] as? Double { totalS = t }
+            if let f = j["fps"] as? Double, f > 0 { fps = f }
             if let d = j["done_s"] as? Double {
                 if startedAt == nil && j["clip"] != nil { startedAt = Date(); startedS = d }
                 doneS = d
             }
-            if let a = j["vu_in"] as? [Double], let b = j["vu_out"] as? [Double] { vuIn = a; vuOut = b; vuStart = Date() }
             return
         }
         log.append(t)
@@ -107,19 +105,29 @@ final class Engine: ObservableObject {
         run(Paths.python, [Paths.engine.appendingPathComponent("fvc.py").path] + args, done: done)
     }
 
+    private var autoResumed = false
+
+    /// Is everything here? If not, the installation goes on by itself from where it stopped (once per start;
+    /// uv, Hugging Face and curl all continue partial downloads, so nothing is fetched twice).
     func check() {
-        guard FileManager.default.fileExists(atPath: Paths.python.path) else { ready = false; msg = "not installed yet"; return }
+        guard FileManager.default.fileExists(atPath: Paths.python.path) else { ready = false; resume(); return }
         py(["check"]) { [weak self] code in
-            self?.ready = code == 0
-            self?.msg = code == 0 ? "ready" : "some parts are missing: press INSTALL"
-            if code == 0 { self?.loadProfiles() }
+            guard let self else { return }
+            self.ready = code == 0
+            if code == 0 { self.msg = "ready"; self.loadProfiles() } else { self.resume() }
         }
     }
 
+    private func resume() {
+        if autoResumed { msg = "the installation stopped (see the log); press INSTALL to go on"; return }
+        autoResumed = true
+        install()
+    }
+
     func install() {
-        log = []; pct = 0; msg = "installing"
+        log = []; msg = "installing (continues where it stopped)"
         run(URL(fileURLWithPath: "/bin/bash"), [Paths.engine.appendingPathComponent("setup.sh").path]) { [weak self] code in
-            if code == 0 { self?.check() } else { self?.msg = "the installation stopped (see the log); press INSTALL to go on" }
+            if code == 0 { self?.check() } else { self?.msg = "the installation stopped (see the log); it goes on by itself at the next start, or press INSTALL" }
         }
     }
 
@@ -170,13 +178,9 @@ struct ContentView: View {
             if !engine.ready { installPanel; if engine.busy { logView } } else { step1; step2; step3 }
         }
         .padding(16)
-        .safeAreaInset(edge: .bottom, spacing: 0) { if engine.ready { vuEdge } }
         .frame(minWidth: 460, minHeight: 500)
         .onAppear {
             engine.check()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {  // the first start installs by itself
-                if !engine.ready && !engine.busy && !FileManager.default.fileExists(atPath: Paths.python.path) { engine.install() }
-            }
             applyTop()
         }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in add(providers); return true }
@@ -410,11 +414,11 @@ struct ContentView: View {
                 "\(clock(e.doneS)) / \(clock(total))",
                 e.busy ? (left.map { "−" + clock($0) } ?? "−…") : nil,
                 e.busy ? left.map { "ends " + Date().addingTimeInterval($0).formatted(date: .omitted, time: .shortened) } : nil,
-                e.busy && e.startedAt != nil ? clock(elapsed) + (rate.map { String(format: " %.1f×", $0) } ?? "") : nil,
+                e.busy && e.startedAt != nil ? clock(elapsed) + (rate.map { String(format: "  %.1f fps", $0 * e.fps) } ?? "") : nil,
             ].compactMap { $0 }
             Text(parts.joined(separator: "  ·  ")).font(.system(size: 12, weight: .semibold, design: .monospaced))
                 .lineLimit(1).minimumScaleFactor(0.6)
-                .accessibilityLabel("converted, time left, finishes, running: " + parts.joined(separator: ", "))
+                .accessibilityLabel("converted, time left, finishes, running and frames per second: " + parts.joined(separator: ", "))
         }
     }
 
@@ -432,25 +436,6 @@ struct ContentView: View {
             Hair(label: "GPU", value: sys.gpu, text: "\(Int(sys.gpu * 100))%")
             Hair(label: "VRAM", value: sys.vramTotal > 0 ? sys.vramFree / sys.vramTotal : 0, text: gb(sys.vramFree), invert: true)
         }
-    }
-
-    // the two VU hairlines (before, after) from edge to edge at the bottom of the window
-    var vuEdge: some View {
-        TimelineView(.animation(minimumInterval: 0.05)) { ctx in
-            let k = Int(ctx.date.timeIntervalSince(engine.vuStart) * 20)
-            VStack(spacing: 2) {
-                VUHair(db: vuAt(engine.vuIn, k), peak: vuPeak(engine.vuIn, k))
-                VUHair(db: vuAt(engine.vuOut, k), peak: vuPeak(engine.vuOut, k))
-            }
-        }
-    }
-
-    // the VU meters replay the last finished clip at its own speed, before (IN) and after (OUT), again and again
-    func vuAt(_ a: [Double], _ k: Int) -> Double { a.isEmpty || !engine.busy && engine.outputs.isEmpty && engine.doneS == 0 ? -60 : a[k % a.count] }
-    func vuPeak(_ a: [Double], _ k: Int) -> Double {
-        guard !a.isEmpty else { return -60 }
-        let i = k % a.count
-        return a[max(0, i - 30)...i].max() ?? -60
     }
 
     // MARK: actions
@@ -493,7 +478,7 @@ struct ContentView: View {
             pickVoice(thenConvert: true); return
         }
         engine.outputs = []; engine.log = []; engine.pct = 0
-        engine.totalS = 0; engine.doneS = 0; engine.startedAt = nil; engine.vuIn = []; engine.vuOut = []
+        engine.totalS = 0; engine.doneS = 0; engine.startedAt = nil
         let job: [String: Any] = ["clips": clips.map { $0.url.path }, "profile": p.dir, "voice": "convert",
                                   "quality": "speech", "export": export, "clean": true, "steps": 30]
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("fvc-job-\(UUID().uuidString).json")

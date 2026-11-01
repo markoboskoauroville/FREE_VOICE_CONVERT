@@ -67,3 +67,6 @@ Every request, word for word, saved and pushed before any code.
 > bottom of the screen Remove that.
 
 > when I say a meter is not literally a meter, it's just an indication, remove that
+
+> please don't calculate the final speed in x. Calculate it at frames per second. How many frames per second? From 25
+> frames. This is converting. Or if they have video files, you can just take their own frame rate
