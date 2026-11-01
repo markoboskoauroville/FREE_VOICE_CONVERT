@@ -15,7 +15,7 @@ namespace FreeVoiceConvert
 {
     static class Program
     {
-        public const int VERSION = 2;
+        public const int VERSION = 3;
         public const string SITE = "https://freevoiceconvert.pages.dev";
 
         [STAThread]
@@ -72,8 +72,8 @@ namespace FreeVoiceConvert
         public MainForm()
         {
             Text = "Free Voice Convert Equalizer";
-            MinimumSize = new Size(520, 520);
-            Size = new Size(620, 560);
+            MinimumSize = new Size(380, 460);
+            Size = new Size(440, 540);
             Font = new Font("Segoe UI", 9.5f);
             try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
 
@@ -82,22 +82,22 @@ namespace FreeVoiceConvert
 
             // the window is a workflow, three steps top to bottom (Marko, 1.11.2026)
             var top = Row();
-            top.Controls.Add(new Label { Text = "FREE VOICE CONVERT EQUALIZER", AutoSize = true, Font = new Font("Consolas", 10f, FontStyle.Bold), Padding = new Padding(0, 6, 8, 0) });
+            top.Controls.Add(new Label { Text = "FREE VOICE CONVERT", AutoSize = true, Font = new Font("Consolas", 10f, FontStyle.Bold), Padding = new Padding(0, 6, 8, 0) });
             top.Controls.Add(chkTop); top.Controls.Add(lnkVersion); top.Controls.Add(btnInstall);
             root.Controls.Add(top);
 
             var s1 = Row();
-            s1.Controls.Add(Step("1  ADD FILES")); s1.Controls.Add(btnAdd); s1.Controls.Add(btnUp); s1.Controls.Add(btnDown); s1.Controls.Add(btnRemove);
+            s1.Controls.Add(step1);
             root.Controls.Add(s1);
             root.Controls.Add(lstClips);
 
             var s2 = Row();
-            s2.Controls.Add(Step("2  HOW TO EXPORT")); s2.Controls.Add(rOne); s2.Controls.Add(rStitch); s2.Controls.Add(rBoth);
+            s2.Controls.Add(Step("②  HOW TO EXPORT")); s2.Controls.Add(rOne); s2.Controls.Add(rStitch); s2.Controls.Add(rBoth);
             root.Controls.Add(s2);
 
             var s3 = new TableLayoutPanel { Dock = DockStyle.Top, ColumnCount = 3, Height = 38 };
             s3.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); s3.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); s3.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            s3.Controls.Add(Step("3  CONVERT"), 0, 0); s3.Controls.Add(btnGo, 1, 0); s3.Controls.Add(bar, 2, 0);
+            s3.Controls.Add(step3, 0, 0); s3.Controls.Add(bar, 2, 0);
             root.Controls.Add(s3);
             root.Controls.Add(lblMsg);
             root.Controls.Add(txtLog);
@@ -107,6 +107,21 @@ namespace FreeVoiceConvert
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
+            step1.Click += (s, e) => PickClips();
+            step3.Click += (s, e) => { if (proc != null) Stop(); else if (ready) Convert(); };
+            // the list without buttons: Delete removes, Alt+Up/Down moves, the right click offers the same
+            lstClips.KeyDown += (s, e) =>
+            {
+                if (e.KeyCode == Keys.Delete) btnRemove.PerformClick();
+                else if (e.Alt && e.KeyCode == Keys.Up) { Move(-1); e.Handled = true; }
+                else if (e.Alt && e.KeyCode == Keys.Down) { Move(1); e.Handled = true; }
+            };
+            var menu = new ContextMenuStrip();
+            menu.Items.Add("Move up", null, (s, e) => Move(-1));
+            menu.Items.Add("Move down", null, (s, e) => Move(1));
+            menu.Items.Add("Remove", null, (s, e) => btnRemove.PerformClick());
+            menu.Items.Add("Remove all", null, (s, e) => lstClips.Items.Clear());
+            lstClips.ContextMenuStrip = menu;
             btnVoice.Click += (s, e) => PickVoice();
             btnAdd.Click += (s, e) => PickClips();
             btnClear.Click += (s, e) => lstClips.Items.Clear();
@@ -125,6 +140,20 @@ namespace FreeVoiceConvert
             DragDrop += (s, e) => { foreach (var f in (string[])e.Data.GetData(DataFormats.FileDrop)) lstClips.Items.Add(f); };
             FormClosing += (s, e) => { SaveSettings(); Stop(); };
             Shown += (s, e) => { LoadSettings(); Check(); };
+        }
+
+        // the round number is the button (Marko, 1.11.2026): lit on hover, a click does the step
+        readonly Label step1 = StepButton("①  ADD FILES");
+        readonly Label step3 = StepButton("③  CONVERT");
+
+        static Label StepButton(string t)
+        {
+            var l = new Label { Text = t, AutoSize = true, Font = new Font("Consolas", 11f, FontStyle.Bold), ForeColor = Color.ForestGreen, Padding = new Padding(0, 6, 10, 0), Cursor = Cursors.Hand };
+            l.MouseEnter += (s, e) => { if (l.Enabled) { l.ForeColor = Color.LimeGreen; l.Font = new Font("Consolas", 11f, FontStyle.Bold | FontStyle.Underline); } };
+            l.MouseLeave += (s, e) => { l.ForeColor = Color.ForestGreen; l.Font = new Font("Consolas", 11f, FontStyle.Bold); };
+            l.AccessibleRole = AccessibleRole.PushButton;
+            l.AccessibleName = t.Substring(3);
+            return l;
         }
 
         static Label Step(string t) => new Label { Text = t, AutoSize = true, Font = new Font("Consolas", 10.5f, FontStyle.Bold), ForeColor = Color.ForestGreen, Padding = new Padding(0, 7, 10, 0) };
@@ -195,6 +224,7 @@ namespace FreeVoiceConvert
         void Busy(bool b)
         {
             btnGo.Text = b ? "STOP" : "CONVERT";
+            step3.Text = b ? "③  STOP" : "③  CONVERT";
             btnInstall.Enabled = !b; btnVoice.Enabled = !b && ready;
         }
 

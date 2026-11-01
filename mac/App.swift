@@ -5,7 +5,7 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
-let VERSION = 2
+let VERSION = 3
 let APPNAME = "Free Voice Convert Equalizer (Mantra)"
 let SITE = "https://freevoiceconvert.pages.dev"
 
@@ -154,7 +154,7 @@ struct ContentView: View {
             if !engine.ready { installPanel; if engine.busy { logView } } else { step1; step2; step3 }
         }
         .padding(16)
-        .frame(minWidth: 460, minHeight: 420)
+        .frame(minWidth: 360, minHeight: 420)
         .onAppear {
             engine.check()
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {  // the first start installs by itself
@@ -167,7 +167,7 @@ struct ContentView: View {
 
     var topRow: some View {
         HStack(spacing: 2) {
-            Text("FREE VOICE CONVERT EQUALIZER").font(.system(size: 12, weight: .bold, design: .monospaced))
+            Text("FREE VOICE CONVERT").font(.system(size: 12, weight: .bold, design: .monospaced))
             Word(text: "ON", lit: true) {}
             Word(text: "OFF", lit: false) { engine.stop(); NSApp.terminate(nil) }
             Spacer(minLength: 4)
@@ -296,18 +296,37 @@ struct ContentView: View {
     func stepTitle(_ n: Int, _ t: String) -> some View {
         HStack(spacing: 8) {
             Text("\(n)").font(.system(size: 13, weight: .bold, design: .monospaced)).foregroundColor(.black)
-                .frame(width: 22, height: 22).background(Circle().fill(Color.green))
+                .frame(width: 22, height: 22).background(Circle().fill(Color.green.opacity(0.55)))
             Text(t).font(.system(size: 13, weight: .bold, design: .monospaced))
+        }
+    }
+
+    /// A step whose round number is its button (Marko, 1.11.2026: "This round number becomes a button on hover").
+    struct StepButton: View {
+        let n: Int; let title: String; var enabled = true; let action: () -> Void
+        @State private var hover = false
+        var body: some View {
+            Button(action: action) {
+                HStack(spacing: 8) {
+                    Text("\(n)").font(.system(size: hover ? 15 : 13, weight: .bold, design: .monospaced))
+                        .foregroundColor(.black)
+                        .frame(width: hover ? 28 : 22, height: hover ? 28 : 22)
+                        .background(Circle().fill(enabled ? (hover ? Color(red: 0.55, green: 1, blue: 0.6) : Color.green) : Color.gray.opacity(0.5)))
+                        .overlay(Circle().stroke(Color.white.opacity(hover && enabled ? 0.9 : 0), lineWidth: 2))
+                        .frame(width: 28, height: 28)
+                    Text(title).font(.system(size: 13, weight: .bold, design: .monospaced))
+                        .foregroundColor(enabled ? (hover ? .green : .primary) : .secondary)
+                        .underline(hover && enabled)
+                }.contentShape(Rectangle())
+            }
+            .buttonStyle(.plain).disabled(!enabled).accessibilityLabel(title)
+            .onHover { h in withAnimation(.easeOut(duration: 0.12)) { hover = h }; if h && enabled { NSCursor.pointingHand.push() } else { NSCursor.pop() } }
         }
     }
 
     var step1: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                stepTitle(1, "ADD FILES")
-                Spacer()
-                Button("ADD FILES…") { pickClips() }
-            }
+            StepButton(n: 1, title: "ADD FILES") { pickClips() }
             List {
                 ForEach(clips) { c in
                     HStack {
@@ -337,12 +356,9 @@ struct ContentView: View {
 
     var step3: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                stepTitle(3, "CONVERT")
-                Spacer()
-                Button(engine.busy ? "STOP" : "CONVERT") { engine.busy ? engine.stop() : convert() }
-                    .keyboardShortcut(.return).disabled(!engine.busy && clips.isEmpty)
-            }
+            StepButton(n: 3, title: engine.busy ? "STOP" : "CONVERT", enabled: engine.busy || !clips.isEmpty) {
+                engine.busy ? engine.stop() : convert()
+            }.keyboardShortcut(.return)
             ProgressView(value: engine.pct, total: 100).padding(.leading, 26)
             Text(engine.msg).font(.callout).foregroundColor(engine.error == nil ? .secondary : .red)
                 .lineLimit(3).fixedSize(horizontal: false, vertical: true).padding(.leading, 26)
@@ -415,6 +431,6 @@ struct FreeVoiceConvertApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     var body: some Scene {
         Window(APPNAME, id: "main") { ContentView() }
-            .defaultSize(width: 560, height: 560)
+            .defaultSize(width: 420, height: 540)
     }
 }
