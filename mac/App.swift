@@ -90,7 +90,8 @@ final class Engine: ObservableObject {
             if let t = j["total_s"] as? Double { totalS = t }
             if let f = j["fps"] as? Double, f > 0 { fps = f }
             if let d = j["done_s"] as? Double {
-                if startedAt == nil && j["clip"] != nil { startedAt = Date(); startedS = d }
+                // the clock starts at the first clip really converted (clips done before a STOP are only read back)
+                if startedAt == nil && j["clip"] != nil && j["cached"] == nil { startedAt = Date(); startedS = d }
                 doneS = d
             }
             return
@@ -396,9 +397,19 @@ struct ContentView: View {
 
     var step3: some View {
         VStack(alignment: .leading, spacing: 6) {
-            StepButton(n: 3, title: engine.busy ? "STOP" : "CONVERT", enabled: engine.busy || !clips.isEmpty) {
-                engine.busy ? engine.stop() : convert()
-            }.keyboardShortcut(.return)
+            HStack(spacing: 12) {
+                StepButton(n: 3, title: engine.busy ? "STOP" : "CONVERT", enabled: engine.busy || !clips.isEmpty) {
+                    engine.busy ? engine.stop() : convert()
+                }.keyboardShortcut(.return)
+                // the percentage beside it; after a STOP: "CONVERTED 50 %", and CONVERT goes on from there
+                if engine.totalS > 0 && (engine.busy || engine.doneS > 0) && engine.outputs.isEmpty {
+                    let p = Int((engine.doneS / engine.totalS * 100).rounded(.down))
+                    Text(engine.busy ? "\(p) %" : "CONVERTED \(p) %")
+                        .font(.system(size: 13, weight: .bold, design: .monospaced))
+                        .foregroundColor(engine.busy ? .green : .orange)
+                        .accessibilityLabel("converted \(p) percent")
+                }
+            }
             ProgressView(value: engine.pct, total: 100).padding(.leading, 26)
             Text(engine.msg).font(.callout).foregroundColor(engine.error == nil ? .secondary : .red)
                 .lineLimit(3).fixedSize(horizontal: false, vertical: true).padding(.leading, 26)
@@ -423,7 +434,7 @@ struct ContentView: View {
             // one table: label above, value, a hairline under (Marko, 1.11.2026: "Make a table layout")
             Grid(horizontalSpacing: 10, verticalSpacing: 8) {
                 GridRow {
-                    Cell(label: "CONVERTED", value: "\(clock(e.doneS)) / \(clock(total))", fill: progress)
+                    Cell(label: "CONVERTED", value: "\(clock(e.doneS)) / \(clock(total))  \(Int((progress * 100).rounded(.down)))%", fill: progress)
                     Cell(label: "TIME LEFT", value: e.busy ? (left.map { clock($0) } ?? "…") : "–", fill: timeFill)
                     Cell(label: "ENDS AT", value: e.busy ? (left.map { Date().addingTimeInterval($0).formatted(date: .omitted, time: .shortened) } ?? "…") : "–", fill: timeFill)
                     Cell(label: "RUNNING", value: e.busy && e.startedAt != nil ? clock(elapsed) : "–", fill: timeFill)

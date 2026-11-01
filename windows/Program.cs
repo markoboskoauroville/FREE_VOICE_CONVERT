@@ -64,6 +64,8 @@ namespace FreeVoiceConvert
         readonly TextBox txtLog = new TextBox { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Fill, Font = new Font("Consolas", 8f) };
         readonly LinkLabel lnkVersion = new LinkLabel { Text = "v" + Program.VERSION, AutoSize = true };
         // one line of times (Marko, 1.11.2026): done / total · countdown · the clock time it ends · running time and fps
+        // beside ③: the percentage while it runs; after a STOP "CONVERTED 50 %", and CONVERT goes on from there
+        readonly Label lblPct = new Label { AutoSize = true, Font = new Font("Consolas", 10.5f, FontStyle.Bold), ForeColor = Color.ForestGreen, Padding = new Padding(0, 7, 10, 0) };
         readonly Hair hDone = new Hair("CONVERTED"), hLeft = new Hair("TIME LEFT"), hEnds = new Hair("ENDS AT"), hRun = new Hair("RUNNING"), hFps = new Hair("SPEED");
         readonly Hair hCpu = new Hair("CPU", true), hRam = new Hair("RAM FREE", true, true), hGpu = new Hair("GPU", true), hVram = new Hair("VRAM FREE", true, true);
         readonly SysMeters meters = new SysMeters();
@@ -105,7 +107,7 @@ namespace FreeVoiceConvert
 
             var s3 = new TableLayoutPanel { Dock = DockStyle.Top, ColumnCount = 3, Height = 38 };
             s3.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); s3.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); s3.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            s3.Controls.Add(step3, 0, 0); s3.Controls.Add(bar, 2, 0);
+            s3.Controls.Add(step3, 0, 0); s3.Controls.Add(lblPct, 1, 0); s3.Controls.Add(bar, 2, 0);
             root.Controls.Add(s3);
             root.Controls.Add(lblMsg);
             // one table: the times on the first row, the machine on the second (Marko, 1.11.2026: "Make a table layout")
@@ -241,7 +243,8 @@ namespace FreeVoiceConvert
                     if (j.TryGetValue("done_s", out var ds))
                     {
                         doneS = System.Convert.ToDouble(ds);
-                        if (startedAt == null && j.ContainsKey("clip")) { startedAt = DateTime.Now; startedS = doneS; }
+                        // the clock starts at the first clip really converted (clips done before a STOP are only read back)
+                        if (startedAt == null && j.ContainsKey("clip") && !j.ContainsKey("cached")) { startedAt = DateTime.Now; startedS = doneS; }
                     }
                     if (j.TryGetValue("outputs", out var o) && o is System.Collections.ArrayList a && a.Count > 0)
                     { outputs = a.Cast<object>().Select(x => x.ToString()).ToList(); btnShow.Visible = true; }
@@ -372,7 +375,11 @@ namespace FreeVoiceConvert
         {
             bool busy = proc != null;
             double progress = totalS > 0 ? doneS / totalS : 0;
-            hDone.Set(progress, $"{Clock(doneS)} / {Clock(totalS)}");
+            int pc = (int)Math.Floor(progress * 100);
+            hDone.Set(progress, $"{Clock(doneS)} / {Clock(totalS)}  {pc}%");
+            if (totalS > 0 && (busy || doneS > 0) && outputs.Count == 0)
+            { lblPct.Text = busy ? $"{pc} %" : $"CONVERTED {pc} %"; lblPct.ForeColor = busy ? Color.ForestGreen : Color.DarkOrange; }
+            else lblPct.Text = "";
             if (busy && startedAt != null && doneS - startedS > 0.5)
             {
                 var el = (DateTime.Now - startedAt.Value).TotalSeconds;

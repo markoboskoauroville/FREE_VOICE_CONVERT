@@ -76,3 +76,7 @@ Every request, word for word, saved and pushed before any code.
 > with times, it's not clear. There are so many numbers, and I don't know what each of them does. Same as CPU, RAM, GPU,
 > VRAM. Make the same hairline under or everything, so we can see where we are. It's like a progress line. Also above
 > each time, same as CPU, RAM, GPU. Put the labels of the time so we know what's going on there. Make a table layout
+
+> I also need to see percentage converted. When I press "Stop to Convert," next to "Convert" it needs to say
+> "Percentage." Instead of "Convert," it needs to say "Converted," let's say 50%. When I say "Convert" again, it
+> continues

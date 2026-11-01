@@ -40,6 +40,8 @@ HOME = home()
 SEEDVC = os.path.join(HOME, "seed-vc")
 MODELS = os.path.join(HOME, "models")
 PROFILES = os.path.join(HOME, "profiles")
+CACHE = os.path.join(HOME, "done")  # each converted clip, kept until its job is complete (STOP, then CONVERT goes on)
+VERSION_ENGINE = 2
 os.environ.setdefault("HF_HUB_CACHE", os.path.join(MODELS, "checkpoints", "hf_cache"))
 os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
 os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")  # BigVGAN has a conv too long for MPS: that op runs on the CPU
@@ -233,6 +235,18 @@ def cmd_run(job_path):
         name = os.path.splitext(os.path.basename(clip))[0]
         say(pct=round(base, 1), msg=f"{i + 1}/{n} {name}: reading ({info['sr']} Hz, {info['ch']} ch, "
                                     f"{info['bits'] or 'lossy'}{'' if info['bits'] in (None, 'float') else '-bit'})", clip=i)
+        key = clip_key(clip, job, prof)
+        cached = os.path.join(CACHE, key + ".wav")
+        if os.path.isfile(cached):  # converted before (a stopped job goes on where it stopped)
+            import soundfile as sf
+            y, sr = sf.read(cached, dtype="float32", always_2d=True)
+            audios.append(y)
+            if export in ("individual", "both"):
+                outputs.append(export_one(clip, info, y, sr, outdir, name))
+            done_before += info["dur"]
+            say(pct=round(base + span, 1), msg=f"{i + 1}/{n} {name}: done before", clip=i, cached=True,
+                total_s=round(total_s, 2), done_s=round(done_before, 2))
+            continue
         x, sr = read_audio(clip, info, clean=job.get("clean", True))
         if convert:
             def prog(f, i=i, base=base, span=span, name=name, d=info["dur"], b=done_before):
@@ -248,6 +262,10 @@ def cmd_run(job_path):
         say(pct=round(base + span * 0.85, 1), msg=f"{i + 1}/{n} {name}: the sound profile", clip=i)
         y, _ = dsp.match_eq(y, sr, prof["ltas"])
         y = dsp.level(y, sr, lufs)
+        os.makedirs(CACHE, exist_ok=True)
+        import soundfile as sf
+        sf.write(cached + ".part.wav", y, sr, subtype="FLOAT")  # whole file or nothing: renamed when complete
+        os.replace(cached + ".part.wav", cached)
         audios.append(y)
         if export in ("individual", "both"):
             outputs.append(export_one(clip, info, y, sr, outdir, name))
@@ -258,8 +276,23 @@ def cmd_run(job_path):
     if export in ("stitched", "both"):
         say(pct=93, msg="stitching")
         outputs.append(stitch(clips, infos, audios, outdir))
+    for c in clips:  # the job is complete: its saved clips are not needed any more
+        try:
+            os.remove(os.path.join(CACHE, clip_key(c, job, prof) + ".wav"))
+        except OSError:
+            pass
     say(pct=100, msg=f"finished in {time.time() - t0:.0f} s", done=True, outputs=outputs)
     return 0
+
+
+def clip_key(clip, job, prof):
+    """The same clip, the same file version and the same settings give the same key."""
+    import hashlib
+    st = os.stat(clip)
+    sig = json.dumps([os.path.abspath(clip), st.st_size, int(st.st_mtime), prof.get("name"), prof.get("ltas"),
+                      job.get("voice", "convert"), job.get("quality", "speech"), job.get("clean", True),
+                      job.get("steps", 30), job.get("lufs", prof.get("lufs", -16)), VERSION_ENGINE])
+    return hashlib.sha1(sig.encode()).hexdigest()[:20]
 
 
 def video_out(clip):
