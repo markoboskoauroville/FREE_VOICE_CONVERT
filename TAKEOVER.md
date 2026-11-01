@@ -7,7 +7,7 @@ CLOUDFLARE_ACCOUNT_ID (set from ~/Downloads/API/Cloudflare.api.txt; it is not a 
 **Proven on this Mac (1.11.2026):** setup.sh from nothing to `ready` (uv, Python 3.11.11, torch 2.5.1 on MPS, Seed-VC
 51383efd, both models, 2.7 GB of models). Three HIR_98 Footage clips (1, 4, 7) with the EM_female_2 profile: SPEECH 88 s,
 STUDIO 355 s for 22 s of sound; one by one and stitched mp4; video length kept; -16.5 LUFS each. Marko's Adobe pair
-(Desktop ORIGINAL.wav / ORIGINAL-enhanced-v2.wav): profile "Adobe enhanced (ORIGINAL)"; listening files in
+(Desktop ORIGINAL.wav / ORIGINAL-enhanced-v2.wav): profile "Studio profile"; listening files in
 ~/Desktop/Free Voice Convert test (0-compare: original, Adobe, ours KEEP, ours CONVERT). The Mac app opens, sees the
 engine ready, lists the profiles (window capture checked).
 

@@ -199,7 +199,7 @@ struct ContentView: View {
 
     var voiceRow: some View {
         HStack(spacing: 8) {
-            Button("SOURCE VOICE…") { pickVoice() }.help("A clean recording of the voice every clip should have (an Adobe-Podcast-enhanced file is ideal)")
+            Button("SOURCE VOICE…") { pickVoice() }.help("A clean recording of the voice every clip should have (a studio-sounding recording is ideal)")
             if !engine.profiles.isEmpty {
                 Picker("", selection: Binding(get: { currentProfile?.id ?? "" }, set: { profileID = $0 })) {
                     ForEach(engine.profiles) { Text($0.name).tag($0.id) }
