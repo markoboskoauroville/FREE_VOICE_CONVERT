@@ -69,29 +69,30 @@ final class SysMeters: ObservableObject {
     }
 }
 
-/// One meter of the row CPU · RAM · GPU · VRAM: the name and the value, a hairline under them.
-/// Green, amber over 70 % load, red over 90 % (for the "free" meters: little left is the load).
-struct Hair: View {
-    let label: String; let value: Double; let text: String; var invert = false
+/// One cell of the table: the label above, the value, a hairline under it that fills (a progress line).
+/// Green, amber over 70 %, red over 90 % when `warn` (the machine's load); otherwise always green (progress).
+struct Cell: View {
+    let label: String; let value: String; let fill: Double; var warn = false; var invert = false
     var color: Color {
-        let load = invert ? 1 - value : value
+        guard warn else { return .green }
+        let load = invert ? 1 - fill : fill
         return load > 0.9 ? .red : load > 0.7 ? .orange : .green
     }
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 4) {
-                Text(label).font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundColor(.secondary)
-                Text(text).font(.system(size: 10, design: .monospaced))
-            }.lineLimit(1).minimumScaleFactor(0.8)
+        VStack(alignment: .leading, spacing: 1) {
+            Text(label).font(.system(size: 9, weight: .bold, design: .monospaced)).foregroundColor(.secondary)
+                .lineLimit(1).minimumScaleFactor(0.8)
+            Text(value).font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .lineLimit(1).minimumScaleFactor(0.7)
             GeometryReader { g in
                 ZStack(alignment: .leading) {
                     Rectangle().fill(Color.white.opacity(0.12))
-                    Rectangle().fill(color).frame(width: max(1, g.size.width * min(max(value, 0), 1)))
-                        .animation(.easeOut(duration: 0.25), value: value)
+                    Rectangle().fill(color).frame(width: max(1, g.size.width * min(max(fill, 0), 1)))
+                        .animation(.easeOut(duration: 0.25), value: fill)
                 }
             }.frame(height: 1)
         }.frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .ignore).accessibilityLabel("\(label) \(text)")
+        .accessibilityElement(children: .ignore).accessibilityLabel("\(label) \(value)")
     }
 }
 

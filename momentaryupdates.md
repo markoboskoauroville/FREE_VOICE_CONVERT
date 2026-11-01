@@ -72,3 +72,7 @@ Every request, word for word, saved and pushed before any code.
 > frames. This is converting. Or if they have video files, you can just take their own frame rate
 
 > we have in the rule "How to export." I am missing: - Pipes - One by one - Pipe stitched - You need to give me pipes
+
+> with times, it's not clear. There are so many numbers, and I don't know what each of them does. Same as CPU, RAM, GPU,
+> VRAM. Make the same hairline under or everything, so we can see where we are. It's like a progress line. Also above
+> each time, same as CPU, RAM, GPU. Put the labels of the time so we know what's going on there. Make a table layout

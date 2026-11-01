@@ -64,8 +64,8 @@ namespace FreeVoiceConvert
         readonly TextBox txtLog = new TextBox { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Fill, Font = new Font("Consolas", 8f) };
         readonly LinkLabel lnkVersion = new LinkLabel { Text = "v" + Program.VERSION, AutoSize = true };
         // one line of times (Marko, 1.11.2026): done / total · countdown · the clock time it ends · running time and fps
-        readonly Label lblStats = new Label { AutoSize = false, Dock = DockStyle.Fill, Height = 22, Font = new Font("Consolas", 10f, FontStyle.Bold), Text = "0:00 / 0:00" };
-        readonly Hair hCpu = new Hair("CPU"), hRam = new Hair("RAM", true), hGpu = new Hair("GPU"), hVram = new Hair("VRAM", true);
+        readonly Hair hDone = new Hair("CONVERTED"), hLeft = new Hair("TIME LEFT"), hEnds = new Hair("ENDS AT"), hRun = new Hair("RUNNING"), hFps = new Hair("SPEED");
+        readonly Hair hCpu = new Hair("CPU", true), hRam = new Hair("RAM FREE", true, true), hGpu = new Hair("GPU", true), hVram = new Hair("VRAM FREE", true, true);
         readonly SysMeters meters = new SysMeters();
         readonly Timer tick = new Timer { Interval = 1000 };
         double totalS, doneS, startedS, fps = 25;
@@ -80,8 +80,8 @@ namespace FreeVoiceConvert
         public MainForm()
         {
             Text = "Free Voice Convert Equalizer";
-            MinimumSize = new Size(480, 520);
-            Size = new Size(520, 600);
+            MinimumSize = new Size(520, 560);
+            Size = new Size(560, 640);
             Font = new Font("Segoe UI", 9.5f);
             try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
 
@@ -108,17 +108,19 @@ namespace FreeVoiceConvert
             s3.Controls.Add(step3, 0, 0); s3.Controls.Add(bar, 2, 0);
             root.Controls.Add(s3);
             root.Controls.Add(lblMsg);
-            root.Controls.Add(lblStats);
-            var ind = new TableLayoutPanel { Dock = DockStyle.Top, ColumnCount = 4, Height = 30 };
-            for (int i = 0; i < 4; i++) ind.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
-            ind.Controls.Add(hCpu, 0, 0); ind.Controls.Add(hRam, 1, 0); ind.Controls.Add(hGpu, 2, 0); ind.Controls.Add(hVram, 3, 0);
-            root.Controls.Add(ind);
+            // one table: the times on the first row, the machine on the second (Marko, 1.11.2026: "Make a table layout")
+            var table = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5, RowCount = 2 };
+            for (int i = 0; i < 5; i++) table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
+            table.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); table.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+            table.Controls.Add(hDone, 0, 0); table.Controls.Add(hLeft, 1, 0); table.Controls.Add(hEnds, 2, 0); table.Controls.Add(hRun, 3, 0); table.Controls.Add(hFps, 4, 0);
+            table.Controls.Add(hCpu, 0, 1); table.Controls.Add(hRam, 1, 1); table.Controls.Add(hGpu, 2, 1); table.Controls.Add(hVram, 3, 1);
+            root.Controls.Add(table);
             root.Controls.Add(txtLog);
             txtLog.Visible = false;  // the installation shows it; a conversion does not
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 82));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             tick.Tick += (s, e) => { UpdateStats(); meters.Read(); hCpu.Set(meters.Cpu, $"{meters.Cpu * 100:0}%");
                 hRam.Set(meters.RamTotal > 0 ? meters.RamFree / meters.RamTotal : 0, Gb(meters.RamFree));
@@ -369,21 +371,24 @@ namespace FreeVoiceConvert
         void UpdateStats()
         {
             bool busy = proc != null;
-            var parts = new List<string> { $"{Clock(doneS)} / {Clock(totalS)}" };
-            if (busy && startedAt != null)
+            double progress = totalS > 0 ? doneS / totalS : 0;
+            hDone.Set(progress, $"{Clock(doneS)} / {Clock(totalS)}");
+            if (busy && startedAt != null && doneS - startedS > 0.5)
             {
                 var el = (DateTime.Now - startedAt.Value).TotalSeconds;
-                if (doneS - startedS > 0.5 && el > 0)
-                {
-                    var rate = (doneS - startedS) / el;               // seconds of sound per second
-                    var left = Math.Max(0, (totalS - doneS) / rate);
-                    parts.Add("−" + Clock(left));
-                    parts.Add("ends " + DateTime.Now.AddSeconds(left).ToString("HH:mm"));
-                    parts.Add(Clock(el) + $"  {rate * fps:0.0} fps");  // frames per second at the clips' own rate
-                }
-                else parts.Add("−…");
+                var rate = (doneS - startedS) / Math.Max(el, 0.001);   // seconds of sound per second
+                var left = Math.Max(0, (totalS - doneS) / rate);
+                var fill = el / Math.Max(el + left, 1);
+                hLeft.Set(fill, Clock(left));
+                hEnds.Set(fill, DateTime.Now.AddSeconds(left).ToString("HH:mm"));
+                hRun.Set(fill, Clock(el));
+                hFps.Set(rate, $"{rate * fps:0.0} fps");                // frames per second at the clips' own rate
             }
-            lblStats.Text = string.Join("  ·  ", parts);
+            else
+            {
+                var t = busy ? "…" : "–";
+                hLeft.Set(0, t); hEnds.Set(0, t); hRun.Set(0, t); hFps.Set(0, "–");
+            }
         }
 
         // ---------------------------------------------------------------- remembered choices

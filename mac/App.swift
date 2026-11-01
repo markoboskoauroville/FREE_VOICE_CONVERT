@@ -178,7 +178,7 @@ struct ContentView: View {
             if !engine.ready { installPanel; if engine.busy { logView } } else { step1; step2; step3 }
         }
         .padding(16)
-        .frame(minWidth: 460, minHeight: 500)
+        .frame(minWidth: 500, minHeight: 520)
         .onAppear {
             engine.check()
             applyTop()
@@ -186,10 +186,10 @@ struct ContentView: View {
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in add(providers); return true }
         .onChange(of: clips) { _, cs in
             let urls = cs.map { $0.url }
-            Task.detached {
+            Task {
                 var t = 0.0
                 for u in urls { if let d = try? await AVURLAsset(url: u).load(.duration), d.isNumeric { t += d.seconds } }
-                await MainActor.run { clipsTotal = t }
+                clipsTotal = t
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .fvcOpen)) { n in
@@ -403,7 +403,6 @@ struct ContentView: View {
             Text(engine.msg).font(.callout).foregroundColor(engine.error == nil ? .secondary : .red)
                 .lineLimit(3).fixedSize(horizontal: false, vertical: true).padding(.leading, 26)
             stats.padding(.leading, 26)
-            meters.padding(.leading, 26).padding(.top, 4)
         }
     }
 
@@ -418,15 +417,26 @@ struct ContentView: View {
             }()
             let left: Double? = rate.map { max(0, (total - e.doneS) / $0) }
             let elapsed = e.startedAt.map { ctx.date.timeIntervalSince($0) } ?? 0
-            let parts: [String] = [
-                "\(clock(e.doneS)) / \(clock(total))",
-                e.busy ? (left.map { "−" + clock($0) } ?? "−…") : nil,
-                e.busy ? left.map { "ends " + Date().addingTimeInterval($0).formatted(date: .omitted, time: .shortened) } : nil,
-                e.busy && e.startedAt != nil ? clock(elapsed) + (rate.map { String(format: "  %.1f fps", $0 * e.fps) } ?? "") : nil,
-            ].compactMap { $0 }
-            Text(parts.joined(separator: "  ·  ")).font(.system(size: 12, weight: .semibold, design: .monospaced))
-                .lineLimit(1).minimumScaleFactor(0.6)
-                .accessibilityLabel("converted, time left, finishes, running and frames per second: " + parts.joined(separator: ", "))
+            let progress = total > 0 ? e.doneS / total : 0
+            let timeFill = left.map { elapsed / max(elapsed + $0, 1) } ?? progress
+            let fpsNow = rate.map { $0 * e.fps }
+            // one table: label above, value, a hairline under (Marko, 1.11.2026: "Make a table layout")
+            Grid(horizontalSpacing: 10, verticalSpacing: 8) {
+                GridRow {
+                    Cell(label: "CONVERTED", value: "\(clock(e.doneS)) / \(clock(total))", fill: progress)
+                    Cell(label: "TIME LEFT", value: e.busy ? (left.map { clock($0) } ?? "…") : "–", fill: timeFill)
+                    Cell(label: "ENDS AT", value: e.busy ? (left.map { Date().addingTimeInterval($0).formatted(date: .omitted, time: .shortened) } ?? "…") : "–", fill: timeFill)
+                    Cell(label: "RUNNING", value: e.busy && e.startedAt != nil ? clock(elapsed) : "–", fill: timeFill)
+                    Cell(label: "SPEED", value: fpsNow.map { String(format: "%.1f fps", $0) } ?? "–", fill: (fpsNow ?? 0) / max(e.fps, 1))
+                }
+                GridRow {
+                    Cell(label: "CPU", value: "\(Int(sys.cpu * 100))%", fill: sys.cpu, warn: true)
+                    Cell(label: "RAM FREE", value: gb(sys.ramFree), fill: sys.ramTotal > 0 ? sys.ramFree / sys.ramTotal : 0, warn: true, invert: true)
+                    Cell(label: "GPU", value: "\(Int(sys.gpu * 100))%", fill: sys.gpu, warn: true)
+                    Cell(label: "VRAM FREE", value: gb(sys.vramFree), fill: sys.vramTotal > 0 ? sys.vramFree / sys.vramTotal : 0, warn: true, invert: true)
+                    Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                }
+            }
         }
     }
 
@@ -434,15 +444,6 @@ struct ContentView: View {
         HStack(spacing: 8) {
             Text(k).font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundColor(.secondary).frame(width: 76, alignment: .leading)
             Text(v).font(.system(size: 13, weight: .semibold, design: .monospaced)).lineLimit(1).minimumScaleFactor(0.7)
-        }
-    }
-
-    var meters: some View {
-        HStack(spacing: 10) {
-            Hair(label: "CPU", value: sys.cpu, text: "\(Int(sys.cpu * 100))%")
-            Hair(label: "RAM", value: sys.ramTotal > 0 ? sys.ramFree / sys.ramTotal : 0, text: gb(sys.ramFree), invert: true)
-            Hair(label: "GPU", value: sys.gpu, text: "\(Int(sys.gpu * 100))%")
-            Hair(label: "VRAM", value: sys.vramTotal > 0 ? sys.vramFree / sys.vramTotal : 0, text: gb(sys.vramFree), invert: true)
         }
     }
 
@@ -518,6 +519,6 @@ struct FreeVoiceConvertApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     var body: some Scene {
         Window(APPNAME, id: "main") { ContentView() }
-            .defaultSize(width: 500, height: 600)
+            .defaultSize(width: 540, height: 620)
     }
 }

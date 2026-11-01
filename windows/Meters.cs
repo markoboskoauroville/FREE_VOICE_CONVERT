@@ -14,31 +14,36 @@ using System.Windows.Forms;
 
 namespace FreeVoiceConvert
 {
+    /// One cell of the table: the label above, the value, a hairline under it that fills (a progress line).
+    /// Green; when `warn` (the machine's load) amber over 70 %, red over 90 % (for "free" cells little left is the load).
     class Hair : Control
     {
-        readonly string label; readonly bool invert;
+        readonly string label; readonly bool invert, warn;
         double value; string text = "–";
-        public Hair(string label, bool invert = false)
+        public Hair(string label, bool warn = false, bool invert = false)
         {
-            this.label = label; this.invert = invert;
-            DoubleBuffered = true; Dock = DockStyle.Fill; Margin = new Padding(0, 0, 8, 0);
+            this.label = label; this.warn = warn; this.invert = invert;
+            DoubleBuffered = true; Dock = DockStyle.Fill; Margin = new Padding(0, 0, 10, 0);
             AccessibleRole = AccessibleRole.Indicator; AccessibleName = label;
         }
-        public void Set(double v, string t) { value = Math.Max(0, Math.Min(1, v)); text = t; AccessibleName = label + " " + t; Invalidate(); }
+        public void Set(double v, string t)
+        {
+            v = double.IsNaN(v) ? 0 : v;
+            value = Math.Max(0, Math.Min(1, v)); text = t; AccessibleName = label + " " + t; Invalidate();
+        }
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics;
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
-            using (var bold = new Font("Consolas", 8.5f, FontStyle.Bold))
-            using (var reg = new Font("Consolas", 8.5f))
+            using (var small = new Font("Consolas", 7.5f, FontStyle.Bold))
+            using (var big = new Font("Consolas", 10f, FontStyle.Bold))
             {
-                g.DrawString(label, bold, Brushes.Gray, 0, 2);
-                var w = g.MeasureString(label + " ", bold).Width;
-                g.DrawString(text, reg, SystemBrushes.ControlText, w, 2);
+                g.DrawString(label, small, Brushes.Gray, 0, 0);
+                g.DrawString(text, big, SystemBrushes.ControlText, 0, 13);
             }
             double load = invert ? 1 - value : value;
-            var c = load > 0.9 ? Color.Red : load > 0.7 ? Color.Orange : Color.LimeGreen;
-            int y = Height - 6;
+            var c = !warn ? Color.LimeGreen : load > 0.9 ? Color.Red : load > 0.7 ? Color.Orange : Color.LimeGreen;
+            int y = Height - 3;
             using (var back = new Pen(Color.FromArgb(60, 128, 128, 128))) g.DrawLine(back, 0, y, Width - 1, y);
             using (var pen = new Pen(c)) g.DrawLine(pen, 0, y, Math.Max(1, (int)((Width - 1) * value)), y);
         }
