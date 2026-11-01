@@ -208,12 +208,12 @@ struct ContentView: View {
             }
         }
         .padding(16)
-        .frame(minWidth: 500, maxWidth: .infinity, minHeight: 560, maxHeight: .infinity, alignment: .top)  // glued to the top
+        .frame(minWidth: 540, maxWidth: .infinity, minHeight: 560, maxHeight: .infinity, alignment: .top)  // glued to the top
         .environment(\.uiScale, scale)
         .background(GeometryReader { g in
             Color.clear
-                .onAppear { scale = min(max(g.size.width / 520, 1), 2.2) }
-                .onChange(of: g.size.width) { _, w in scale = min(max(w / 520, 1), 2.2) }
+                .onAppear { scale = min(max(g.size.width / 560, 1), 2.2) }
+                .onChange(of: g.size.width) { _, w in scale = min(max(w / 560, 1), 2.2) }
         })
         .onAppear {
             if !checkedOnce { checkedOnce = true; engine.check() }
@@ -485,7 +485,7 @@ struct ContentView: View {
             // one table: label above, value, a hairline under (Marko, 1.11.2026: "Make a table layout")
             Grid(horizontalSpacing: 10, verticalSpacing: 8) {
                 GridRow {
-                    Cell(label: "CONVERTED", value: "\(clock(e.doneS)) / \(clock(total))  \(Int((progress * 100).rounded(.down)))%", fill: progress)
+                    Cell(label: "CONVERTED", value: "\(clock(e.doneS)) / \(clock(total))", fill: progress)
                     Cell(label: "TIME LEFT", value: e.busy ? (left.map { clock($0) } ?? "…") : "–", fill: timeFill)
                     Cell(label: "ENDS AT", value: e.busy ? (left.map { Date().addingTimeInterval($0).formatted(date: .omitted, time: .shortened) } ?? "…") : "–", fill: timeFill)
                     Cell(label: "RUNNING", value: e.busy && e.startedAt != nil ? clock(elapsed) : "–", fill: timeFill)

@@ -388,7 +388,7 @@ namespace FreeVoiceConvert
             bool busy = proc != null;
             double progress = totalS > 0 ? doneS / totalS : 0;
             int pc = (int)Math.Floor(progress * 100);
-            hDone.Set(progress, $"{Clock(doneS)} / {Clock(totalS)}  {pc}%");
+            hDone.Set(progress, $"{Clock(doneS)} / {Clock(totalS)}");
             if (totalS > 0 && (busy || doneS > 0) && outputs.Count == 0)
             { lblPct.Text = busy ? $"{pc} %" : $"CONVERTED {pc} %"; lblPct.ForeColor = busy ? Color.ForestGreen : Color.DarkOrange; }
             else lblPct.Text = "";

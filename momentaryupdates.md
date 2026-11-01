@@ -100,3 +100,6 @@ Every request, word for word, saved and pushed before any code.
 > of this user interface
 
 > if not already, this app should remember its last position and on which screen it was positioned
+
+> now, please, when there is a converted time left, it ends at running speed. The font size would be the same as CPU RAM
+> free, GPU RAM free, same. Now, convert these tiny numbers. I even cannot read. Total nonsense.

@@ -82,9 +82,10 @@ struct Cell: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(label).font(.system(size: 9 * k, weight: .bold, design: .monospaced)).foregroundColor(.secondary)
-                .lineLimit(1).minimumScaleFactor(0.8)
+                .lineLimit(1).fixedSize()
+            // one size for every value in the table, never shrunk to fit (Marko, 1.11.2026: "I even cannot read")
             Text(value).font(.system(size: 12 * k, weight: .semibold, design: .monospaced))
-                .lineLimit(1).minimumScaleFactor(0.7)
+                .lineLimit(1).fixedSize()
             GeometryReader { g in
                 ZStack(alignment: .leading) {
                     Rectangle().fill(Color.white.opacity(0.12))
