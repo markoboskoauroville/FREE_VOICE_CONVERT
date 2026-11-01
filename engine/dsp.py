@@ -29,9 +29,13 @@ def voiced_frames(x, sr, frame=2048, hop=1024, gate_db=-35):
     return fr[keep] if keep.any() else fr
 
 
+def mono(x):
+    return x.mean(axis=1) if x.ndim == 2 else x
+
+
 def ltas(x, sr):
-    """Long-term average spectrum in dB at BANDS (voiced frames only)."""
-    fr = voiced_frames(x, sr)
+    """Long-term average spectrum in dB at BANDS (voiced frames only), of the channels mixed."""
+    fr = voiced_frames(mono(x), sr)
     spec = (np.abs(np.fft.rfft(fr, axis=1)) ** 2).mean(axis=0)
     freqs = np.fft.rfftfreq(fr.shape[1], 1 / sr)
     out = []
@@ -46,7 +50,9 @@ def ltas(x, sr):
 def loudness(x, sr):
     import pyloudnorm as pyln
     if len(x) < sr // 2:
-        x = np.pad(x, (0, sr // 2 - len(x)))
+        x = np.pad(x, ((0, sr // 2 - len(x)),) + (((0, 0),) if x.ndim == 2 else ()))
+    if x.ndim == 2 and x.shape[1] > 5:  # BS.1770 weights only up to 5 channels here: measure the mix
+        x = x.mean(axis=1)
     return float(pyln.Meter(sr).integrated_loudness(x))
 
 
@@ -62,15 +68,20 @@ def match_eq(x, sr, target_ltas, max_db=12.0, smooth=3):
     f = np.concatenate([[0], BANDS[BANDS < nyq * 0.98], [nyq]]) / nyq
     g = np.concatenate([[diff[0]], diff[BANDS < nyq * 0.98], [min(diff[-1], 0)]])
     gains = 10 ** (g / 20)
-    taps = signal.firwin2(2047, f, gains)
-    y = signal.fftconvolve(x, taps, mode="full")[1023:1023 + len(x)]
+    ntap = 2047 if sr <= 50000 else 4095  # the same resolution in Hz at 88.2/96 kHz
+    taps = signal.firwin2(ntap, f, gains)
+    h = ntap // 2
+    if x.ndim == 2:  # the same curve on every channel: the stereo picture is kept
+        y = np.stack([signal.fftconvolve(x[:, c], taps, mode="full")[h:h + len(x)] for c in range(x.shape[1])], axis=1)
+    else:
+        y = signal.fftconvolve(x, taps, mode="full")[h:h + len(x)]
     return y.astype(np.float32), diff
 
 
 def limit(x, ceiling_db=-1.0, sr=SR):
     """A gentle look-ahead peak limiter (5 ms attack, 80 ms release)."""
     c = 10 ** (ceiling_db / 20)
-    peak = np.abs(x)
+    peak = np.abs(x).max(axis=1) if x.ndim == 2 else np.abs(x)  # one gain for all channels
     if peak.max() <= c:
         return x
     from scipy.ndimage import minimum_filter1d
@@ -88,7 +99,7 @@ def limit(x, ceiling_db=-1.0, sr=SR):
         cur = v if v < cur else a * cur + (1 - a) * v
         env[i] = cur
     env = np.minimum(np.repeat(env, blk)[: len(g)], g)
-    return (x * env).astype(np.float32)
+    return (x * (env[:, None] if x.ndim == 2 else env)).astype(np.float32)
 
 
 def level(x, sr, lufs=-16.0, ceiling_db=-1.0):

@@ -5,7 +5,7 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
-let VERSION = 1
+let VERSION = 2
 let APPNAME = "Free Voice Convert Equalizer (Mantra)"
 let SITE = "https://freevoiceconvert.pages.dev"
 
@@ -151,8 +151,7 @@ struct ContentView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             topRow
-            if !engine.ready { installPanel } else { voiceRow; clipList; optionsRow; convertRow }
-            if showLog || (!engine.ready && engine.busy) { logView }
+            if !engine.ready { installPanel; if engine.busy { logView } } else { step1; step2; step3 }
         }
         .padding(16)
         .frame(minWidth: 460, minHeight: 420)
@@ -293,6 +292,63 @@ struct ContentView: View {
         }
     }
 
+    // MARK: the workflow, three steps top to bottom (Marko, 1.11.2026: "make all my interface a workflow, 1, 2, 3")
+    func stepTitle(_ n: Int, _ t: String) -> some View {
+        HStack(spacing: 8) {
+            Text("\(n)").font(.system(size: 13, weight: .bold, design: .monospaced)).foregroundColor(.black)
+                .frame(width: 22, height: 22).background(Circle().fill(Color.green))
+            Text(t).font(.system(size: 13, weight: .bold, design: .monospaced))
+        }
+    }
+
+    var step1: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                stepTitle(1, "ADD FILES")
+                Spacer()
+                Button("ADD FILES…") { pickClips() }
+            }
+            List {
+                ForEach(clips) { c in
+                    HStack {
+                        Image(systemName: isVideo(c.url) ? "film" : "waveform")
+                        Text(c.url.lastPathComponent).lineLimit(1).truncationMode(.middle)
+                        Spacer()
+                        Button { clips.removeAll { $0.id == c.id } } label: { Image(systemName: "xmark.circle") }
+                            .buttonStyle(.plain).accessibilityLabel("remove \(c.url.lastPathComponent)")
+                    }
+                }.onMove { clips.move(fromOffsets: $0, toOffset: $1) }
+            }
+            .frame(minHeight: 160)
+            .overlay { if clips.isEmpty { Text("drop any audio or video file here\n(drag to change the order)").multilineTextAlignment(.center).foregroundColor(.secondary) } }
+        }
+    }
+
+    var step2: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            stepTitle(2, "HOW TO EXPORT")
+            HStack(spacing: 2) {
+                Word(text: "ONE BY ONE", lit: export == "individual") { export = "individual" }
+                Word(text: "STITCHED", lit: export == "stitched") { export = "stitched" }
+                Word(text: "BOTH", lit: export == "both") { export = "both" }
+            }.padding(.leading, 26)
+        }
+    }
+
+    var step3: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                stepTitle(3, "CONVERT")
+                Spacer()
+                Button(engine.busy ? "STOP" : "CONVERT") { engine.busy ? engine.stop() : convert() }
+                    .keyboardShortcut(.return).disabled(!engine.busy && clips.isEmpty)
+            }
+            ProgressView(value: engine.pct, total: 100).padding(.leading, 26)
+            Text(engine.msg).font(.callout).foregroundColor(engine.error == nil ? .secondary : .red)
+                .lineLimit(3).fixedSize(horizontal: false, vertical: true).padding(.leading, 26)
+        }
+    }
+
     // MARK: actions
     func applyTop() {
         DispatchQueue.main.async { NSApp.windows.forEach { $0.level = onTop ? .floating : .normal } }
@@ -310,33 +366,39 @@ struct ContentView: View {
 
     func pickClips() {
         let o = NSOpenPanel()
-        o.allowsMultipleSelection = true
-        o.allowedContentTypes = [.audio, .movie, .audiovisualContent]
+        o.allowsMultipleSelection = true  // any file ffmpeg can read: no type filter
         if o.runModal() == .OK { clips += o.urls.map { Clip(url: $0) } }
     }
 
-    func pickVoice() {
+    func pickVoice(thenConvert: Bool = false) {
         let o = NSOpenPanel()
         o.message = "Pick a clean recording of the voice (10 to 30 seconds of speech is enough)"
-        o.allowedContentTypes = [.audio, .movie, .audiovisualContent]
         guard o.runModal() == .OK, let u = o.url else { return }
         let name = u.deletingPathExtension().lastPathComponent
         engine.py(["profile", u.path, name]) { code in
             if code == 0 {
                 engine.loadProfiles()
                 profileID = engine.profiles.first { $0.name == name }?.id ?? profileID
+                if thenConvert { convert() }
             }
         }
     }
 
     func convert() {
-        guard let p = currentProfile else { return }
+        guard let p = currentProfile else {  // no voice yet: asked once, then it stays
+            pickVoice(thenConvert: true); return
+        }
         engine.outputs = []; engine.log = []; engine.pct = 0
-        let job: [String: Any] = ["clips": clips.map { $0.url.path }, "profile": p.dir, "voice": voice,
-                                  "quality": quality, "export": export, "clean": clean, "steps": 30]
+        let job: [String: Any] = ["clips": clips.map { $0.url.path }, "profile": p.dir, "voice": "convert",
+                                  "quality": "speech", "export": export, "clean": true, "steps": 30]
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("fvc-job-\(UUID().uuidString).json")
         try? JSONSerialization.data(withJSONObject: job).write(to: url)
-        engine.py(["run", url.path]) { _ in try? FileManager.default.removeItem(at: url) }
+        engine.py(["run", url.path]) { code in
+            try? FileManager.default.removeItem(at: url)
+            if code == 0 && !engine.outputs.isEmpty {
+                NSWorkspace.shared.activateFileViewerSelecting(engine.outputs.map { URL(fileURLWithPath: $0) })
+            }
+        }
     }
 }
 

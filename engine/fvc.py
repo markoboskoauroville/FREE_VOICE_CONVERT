@@ -63,39 +63,62 @@ def ffmpeg():
 
 
 def probe(path):
-    """(has_video, duration_s, width, height, fps) from ffmpeg's own banner."""
+    """What the file holds, from ffmpeg's own banner: picture (size, fps, codec) and sound (rate, channels, depth)."""
     r = subprocess.run([ffmpeg(), "-hide_banner", "-i", path], capture_output=True, text=True, errors="replace")
     t = r.stderr
     dur = 0.0
     m = re.search(r"Duration: (\d+):(\d+):(\d+\.\d+)", t)
     if m:
         dur = int(m[1]) * 3600 + int(m[2]) * 60 + float(m[3])
-    v = re.search(r"Stream #\S+.*Video: .*?(\d{2,5})x(\d{2,5})", t)
-    if v and "attached pic" in t[v.start():t.find("\n", v.start())]:
-        v = None  # a cover picture in an mp3 is not a video
-    fps = 30.0
-    f = re.search(r"(\d+(?:\.\d+)?) fps", t)
-    if f:
-        fps = float(f[1])
-    has_audio = bool(re.search(r"Stream #\S+.*Audio:", t))
-    return {"video": bool(v), "audio": has_audio, "dur": dur, "w": int(v[1]) if v else 0, "h": int(v[2]) if v else 0,
-            "fps": fps}
+    vline = next((l for l in t.splitlines() if re.search(r"Stream #\S+.*Video:", l) and "attached pic" not in l), "")
+    v = re.search(r"Video: (\w+).*?(\d{2,5})x(\d{2,5})", vline)
+    f = re.search(r"(\d+(?:\.\d+)?) fps", vline) or re.search(r"(\d+(?:\.\d+)?) tbr", vline)
+    aline = next((l for l in t.splitlines() if re.search(r"Stream #\S+.*Audio:", l)), "")
+    a = re.search(r"Audio: (\w+)", aline)
+    sr = re.search(r"(\d+) Hz", aline)
+    ch = 2
+    layouts = {"mono": 1, "stereo": 2, "2.1": 3, "3.0": 3, "quad": 4, "4.0": 4, "4.1": 5, "5.0": 5, "5.1": 6,
+               "6.0": 6, "6.1": 7, "7.0": 7, "7.1": 8}
+    lay = re.search(r"Hz, ([\w.]+)(?:\(\w+\))?,", aline)
+    if lay and lay[1] in layouts:
+        ch = layouts[lay[1]]
+    elif re.search(r"(\d+) channels", aline):
+        ch = int(re.search(r"(\d+) channels", aline)[1])
+    # bit depth: pcm_s16le / s16 -> 16, s24 / "(24 bit)" -> 24, s32 -> 32, flt/f32 -> float; lossy codecs have none
+    bits = None
+    if re.search(r"\(24 bit\)|pcm_s24|s24", aline):
+        bits = 24
+    elif re.search(r"pcm_s16|\bs16p?\b", aline) and (a and (a[1].startswith("pcm") or a[1] in ("flac", "alac"))):
+        bits = 16
+    elif re.search(r"pcm_s32|\bs32p?\b", aline) and (a and (a[1].startswith("pcm") or a[1] in ("flac", "alac"))):
+        bits = 32
+    elif re.search(r"pcm_f32|pcm_f64", aline):
+        bits = "float"
+    return {"video": bool(v), "vcodec": v[1] if v else "", "w": int(v[2]) if v else 0, "h": int(v[3]) if v else 0,
+            "fps": float(f[1]) if f else 30.0, "audio": bool(a), "acodec": a[1] if a else "", "dur": dur,
+            "sr": int(sr[1]) if sr else 48000, "ch": max(1, min(ch, 8)), "bits": bits}
 
 
-def read_audio(path, sr=48000, clean=True):
+def read_audio(path, info=None, clean=True):
+    """The sound as it is: its own sample rate and channels, float32, shape (samples, channels). Nothing resampled."""
     import numpy as np
-    af = ["aresample=48000"]
+    info = info or probe(path)
+    sr, ch = info["sr"], info["ch"]
+    cmd = [ffmpeg(), "-v", "error", "-i", path, "-vn", "-map", "0:a:0"]
     if clean:  # rumble and steady noise away before the voice is read (the "Clear" we used in Resolve, gently)
-        af = ["highpass=f=70", "afftdn=nf=-25:tn=1"] + af
-    cmd = [ffmpeg(), "-v", "error", "-i", path, "-vn", "-ac", "1", "-af", ",".join(af), "-ar", str(sr),
-           "-f", "f32le", "-"]
+        cmd += ["-af", "highpass=f=70,afftdn=nf=-25:tn=1"]
+    cmd += ["-ac", str(ch), "-ar", str(sr), "-f", "f32le", "-"]
     raw = subprocess.run(cmd, capture_output=True, check=True).stdout
-    return np.frombuffer(raw, dtype=np.float32).copy(), sr
+    return np.frombuffer(raw, dtype=np.float32).copy().reshape(-1, ch), sr
 
 
-def write_wav(path, x, sr):
+SUBTYPE = {16: "PCM_16", 24: "PCM_24", 32: "PCM_32", "float": "FLOAT"}
+PCM = {16: "pcm_s16le", 24: "pcm_s24le", 32: "pcm_s32le", "float": "pcm_f32le"}
+
+
+def write_wav(path, x, sr, bits=24):
     import soundfile as sf
-    sf.write(path, x, sr, subtype="PCM_24")
+    sf.write(path, x, sr, subtype=SUBTYPE.get(bits or 24, "PCM_24"))
 
 
 # ------------------------------------------------------------------------------------------------ commands
@@ -165,7 +188,10 @@ def cmd_profiles():
 
 def cmd_run(job_path):
     """job: {"clips": [paths], "profile": id-or-dir, "voice": "convert"|"keep", "quality": "speech"|"studio",
-    "export": "individual"|"stitched"|"both", "outdir": path, "clean": true, "steps": 30, "lufs": -16}"""
+    "export": "individual"|"stitched"|"both", "outdir": path, "clean": true, "steps": 30, "lufs": -16}
+
+    Lossless where it can be: every clip comes out at its own sample rate, bit depth (24-bit for lossy sources) and
+    channel count; a video keeps its picture untouched and gets the sound as PCM (in .mov, or .mkv for mkv/webm/avi)."""
     import numpy as np
     import dsp
     job = json.load(open(job_path))
@@ -195,25 +221,29 @@ def cmd_run(job_path):
         base = 2 + 90 * i / n
         span = 90 / n
         info = probe(clip)
+        if not info["audio"]:
+            raise RuntimeError(f"{os.path.basename(clip)} has no sound")
         infos.append(info)
         name = os.path.splitext(os.path.basename(clip))[0]
-        say(pct=round(base, 1), msg=f"{i + 1}/{n} {name}: reading", clip=i)
-        x, sr = read_audio(clip, clean=job.get("clean", True))
+        say(pct=round(base, 1), msg=f"{i + 1}/{n} {name}: reading ({info['sr']} Hz, {info['ch']} ch, "
+                                    f"{info['bits'] or 'lossy'}{'' if info['bits'] in (None, 'float') else '-bit'})", clip=i)
+        x, sr = read_audio(clip, info, clean=job.get("clean", True))
         if convert:
             def prog(f, i=i, base=base, span=span, name=name):
                 say(pct=round(base + span * 0.8 * f, 1), msg=f"{i + 1}/{n} {name}: the voice", clip=i)
-            y, ysr = vc.convert(x, sr, ref, steps=steps, progress=prog)
+            y, ysr = vc.convert(x.mean(axis=1), sr, ref, steps=steps, progress=prog)
             import librosa
-            y = librosa.resample(y, orig_sr=ysr, target_sr=48000).astype(np.float32)
+            y = librosa.resample(y, orig_sr=ysr, target_sr=sr, res_type="soxr_vhq").astype(np.float32)
             y = y[: len(x)] if len(y) >= len(x) else np.pad(y, (0, len(x) - len(y)))  # frame by frame, same length
+            y = np.repeat(y[:, None], x.shape[1], axis=1)  # the voice in every channel the file had
         else:
             y = x
         say(pct=round(base + span * 0.85, 1), msg=f"{i + 1}/{n} {name}: the sound profile", clip=i)
-        y, _ = dsp.match_eq(y, 48000, prof["ltas"])
-        y = dsp.level(y, 48000, lufs)
+        y, _ = dsp.match_eq(y, sr, prof["ltas"])
+        y = dsp.level(y, sr, lufs)
         audios.append(y)
         if export in ("individual", "both"):
-            outputs.append(export_one(clip, info, y, outdir, name))
+            outputs.append(export_one(clip, info, y, sr, outdir, name))
         say(pct=round(base + span, 1), msg=f"{i + 1}/{n} {name}: done", clip=i)
 
     if export in ("stitched", "both"):
@@ -223,47 +253,80 @@ def cmd_run(job_path):
     return 0
 
 
-def export_one(clip, info, y, outdir, name):
+def video_out(clip):
+    ext = os.path.splitext(clip)[1].lower()
+    return ".mkv" if ext in (".mkv", ".webm", ".avi") else ".mov"
+
+
+def export_one(clip, info, y, sr, outdir, name):
+    bits = info["bits"] or 24
     wav = os.path.join(outdir, f"{name}_fvc.wav")
-    write_wav(wav, y, 48000)
+    write_wav(wav, y, sr, bits)
     if not info["video"]:
         return wav
-    ext = os.path.splitext(clip)[1].lower()
-    ext = ext if ext in (".mp4", ".mov", ".m4v", ".mkv") else ".mp4"
-    out = os.path.join(outdir, f"{name}_fvc{ext}")
+    out = os.path.join(outdir, f"{name}_fvc{video_out(clip)}")
+    # the picture copied bit for bit; the sound as PCM at the source's rate and depth
     subprocess.run([ffmpeg(), "-y", "-v", "error", "-i", clip, "-i", wav, "-map", "0:v:0", "-map", "1:a:0",
-                    "-c:v", "copy", "-c:a", "aac", "-b:a", "320k", "-shortest", out], check=True)
+                    "-c:v", "copy", "-c:a", PCM.get(bits, "pcm_s24le"), "-shortest", out], check=True)
     os.remove(wav)
     return out
 
 
-def fit(y, seconds, sr=48000):
+def fit(y, seconds, sr):
     import numpy as np
     n = int(round(seconds * sr))
-    return y[:n] if len(y) >= n else np.pad(y, (0, n - len(y)))
+    return y[:n] if len(y) >= n else np.pad(y, ((0, n - len(y)), (0, 0)))
 
 
 def stitch(clips, infos, audios, outdir):
+    """One file in the list's order, in the first clip's sound format (others resampled to it, soxr very high)."""
     import numpy as np
+    import librosa
+    sr, ch = infos[0]["sr"], max(i["ch"] for i in infos)
+    bits = infos[0]["bits"] or 24
+    same = []
+    for a, i in zip(audios, infos):
+        if i["sr"] != sr:
+            a = librosa.resample(a.T, orig_sr=i["sr"], target_sr=sr, res_type="soxr_vhq").T.astype(np.float32)
+        if a.shape[1] < ch:
+            a = np.repeat(a[:, :1], ch, axis=1) if a.shape[1] == 1 else np.pad(a, ((0, 0), (0, ch - a.shape[1])))
+        same.append(a)
     any_video = any(i["video"] for i in infos)
-    sr = 48000
     if not any_video:
-        fade = int(0.01 * sr)
+        fade = int(0.005 * sr)  # 5 ms at each joint so no click
         parts = []
-        for y in audios:
+        for y in same:
             y = y.copy()
             if len(y) > 2 * fade:
-                y[:fade] *= np.linspace(0, 1, fade)
-                y[-fade:] *= np.linspace(1, 0, fade)
+                y[:fade] *= np.linspace(0, 1, fade)[:, None]
+                y[-fade:] *= np.linspace(1, 0, fade)[:, None]
             parts.append(y)
         out = os.path.join(outdir, "stitched_fvc.wav")
-        write_wav(out, np.concatenate(parts), sr)
+        write_wav(out, np.concatenate(parts), sr, bits)
         return out
-    first = next(i for i in infos if i["video"])
-    W, H, FPS = first["w"] - first["w"] % 2, first["h"] - first["h"] % 2, first["fps"]
-    durs = [i["dur"] if i["dur"] > 0 else len(a) / sr for i, a in zip(infos, audios)]
+    vids = [i for i in infos if i["video"]]
+    first = vids[0]
+    durs = [i["dur"] if i["dur"] > 0 else len(a) / sr for i, a in zip(infos, same)]
     wav = os.path.join(outdir, "stitched_fvc_audio.wav")
-    write_wav(wav, np.concatenate([fit(a, d) for a, d in zip(audios, durs)]), sr)
+    write_wav(wav, np.concatenate([fit(a, d, sr) for a, d in zip(same, durs)]), sr, bits)
+    ext = video_out(clips[0])
+    out = os.path.join(outdir, "stitched_fvc" + ext)
+    acodec = PCM.get(bits, "pcm_s24le")
+    # lossless join when every clip is video with the same codec, size and frame rate: the picture is not touched
+    if len(vids) == len(infos) and all((i["vcodec"], i["w"], i["h"], round(i["fps"], 2)) ==
+                                       (first["vcodec"], first["w"], first["h"], round(first["fps"], 2)) for i in infos):
+        lst = os.path.join(outdir, "stitched_fvc_list.txt")
+        with open(lst, "w", encoding="utf-8") as f:
+            for c in clips:
+                f.write("file '" + os.path.abspath(c).replace("'", "'\\''") + "'\n")
+        r = subprocess.run([ffmpeg(), "-y", "-v", "error", "-f", "concat", "-safe", "0", "-i", lst, "-i", wav,
+                            "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", acodec, "-shortest", out])
+        os.remove(lst)
+        if r.returncode == 0:
+            os.remove(wav)
+            return out
+        print("lossless join failed; the picture is re-encoded")
+    W, H, FPS = first["w"] - first["w"] % 2, first["h"] - first["h"] % 2, first["fps"]
     cmd, filt = [ffmpeg(), "-y", "-v", "error"], []
     for k, (clip, info, d) in enumerate(zip(clips, infos, durs)):
         if info["video"]:
@@ -274,12 +337,12 @@ def stitch(clips, infos, audios, outdir):
                     f"setsar=1,fps={FPS},format=yuv420p,trim=duration={d:.3f},setpts=PTS-STARTPTS[v{k}]")
     n = len(clips)
     filt.append("".join(f"[v{k}]" for k in range(n)) + f"concat=n={n}:v=1:a=0[v]")
+    # clips that differ must be re-encoded: near-lossless H.264 (crf 12)
     cmd += ["-i", wav, "-filter_complex", ";".join(filt), "-map", "[v]", "-map", f"{n}:a",
-            "-c:v", "libx264", "-crf", "18", "-preset", "medium", "-c:a", "aac", "-b:a", "320k", "-shortest",
-            os.path.join(outdir, "stitched_fvc.mp4")]
+            "-c:v", "libx264", "-crf", "12", "-preset", "slow", "-c:a", acodec, "-shortest", out]
     subprocess.run(cmd, check=True)
     os.remove(wav)
-    return os.path.join(outdir, "stitched_fvc.mp4")
+    return out
 
 
 def main(argv):

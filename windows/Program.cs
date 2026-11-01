@@ -15,7 +15,7 @@ namespace FreeVoiceConvert
 {
     static class Program
     {
-        public const int VERSION = 1;
+        public const int VERSION = 2;
         public const string SITE = "https://freevoiceconvert.pages.dev";
 
         [STAThread]
@@ -73,44 +73,39 @@ namespace FreeVoiceConvert
         {
             Text = "Free Voice Convert Equalizer";
             MinimumSize = new Size(520, 520);
-            Size = new Size(640, 640);
+            Size = new Size(620, 560);
             Font = new Font("Segoe UI", 9.5f);
             try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
 
             var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, Padding = new Padding(12) };
             Controls.Add(root);
 
+            // the window is a workflow, three steps top to bottom (Marko, 1.11.2026)
             var top = Row();
             top.Controls.Add(new Label { Text = "FREE VOICE CONVERT EQUALIZER", AutoSize = true, Font = new Font("Consolas", 10f, FontStyle.Bold), Padding = new Padding(0, 6, 8, 0) });
             top.Controls.Add(chkTop); top.Controls.Add(lnkVersion); top.Controls.Add(btnInstall);
             root.Controls.Add(top);
 
-            var voice = Row();
-            voice.Controls.Add(btnVoice); voice.Controls.Add(cmbProfile);
-            root.Controls.Add(voice);
-
-            var tools = Row();
-            tools.Controls.Add(btnAdd); tools.Controls.Add(btnUp); tools.Controls.Add(btnDown); tools.Controls.Add(btnRemove); tools.Controls.Add(btnClear);
-            tools.Controls.Add(new Label { Text = "drop audio or video; the order is the stitch order", AutoSize = true, ForeColor = Color.Gray, Padding = new Padding(4, 7, 0, 0) });
-            root.Controls.Add(tools);
-
+            var s1 = Row();
+            s1.Controls.Add(Step("1  ADD FILES")); s1.Controls.Add(btnAdd); s1.Controls.Add(btnUp); s1.Controls.Add(btnDown); s1.Controls.Add(btnRemove);
+            root.Controls.Add(s1);
             root.Controls.Add(lstClips);
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 60));
 
-            root.Controls.Add(Group("VOICE", rConvert, rKeep, chkClean));
-            root.Controls.Add(Group("QUALITY", rSpeech, rStudio));
-            root.Controls.Add(Group("EXPORT", rOne, rStitch, rBoth));
+            var s2 = Row();
+            s2.Controls.Add(Step("2  HOW TO EXPORT")); s2.Controls.Add(rOne); s2.Controls.Add(rStitch); s2.Controls.Add(rBoth);
+            root.Controls.Add(s2);
 
-            var go = new TableLayoutPanel { Dock = DockStyle.Top, ColumnCount = 3, Height = 38 };
-            go.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); go.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); go.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            go.Controls.Add(btnGo, 0, 0); go.Controls.Add(bar, 1, 0); go.Controls.Add(btnShow, 2, 0);
-            root.Controls.Add(go);
+            var s3 = new TableLayoutPanel { Dock = DockStyle.Top, ColumnCount = 3, Height = 38 };
+            s3.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); s3.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); s3.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            s3.Controls.Add(Step("3  CONVERT"), 0, 0); s3.Controls.Add(btnGo, 1, 0); s3.Controls.Add(bar, 2, 0);
+            root.Controls.Add(s3);
             root.Controls.Add(lblMsg);
             root.Controls.Add(txtLog);
-            for (int i = 0; i < 4; i++) root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
-            root.RowStyles.Add(new RowStyle(SizeType.Percent, 40));
+            txtLog.Visible = false;  // the installation shows it; a conversion does not
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
             btnVoice.Click += (s, e) => PickVoice();
             btnAdd.Click += (s, e) => PickClips();
@@ -131,6 +126,8 @@ namespace FreeVoiceConvert
             FormClosing += (s, e) => { SaveSettings(); Stop(); };
             Shown += (s, e) => { LoadSettings(); Check(); };
         }
+
+        static Label Step(string t) => new Label { Text = t, AutoSize = true, Font = new Font("Consolas", 10.5f, FontStyle.Bold), ForeColor = Color.ForestGreen, Padding = new Padding(0, 7, 10, 0) };
 
         static FlowLayoutPanel Row() => new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true };
 
@@ -218,10 +215,10 @@ namespace FreeVoiceConvert
 
         void Install()
         {
-            txtLog.Clear(); bar.Value = 0; lblMsg.Text = "installing";
+            txtLog.Clear(); txtLog.Visible = true; bar.Value = 0; lblMsg.Text = "installing";
             var ps = Path.Combine(Environment.SystemDirectory, @"WindowsPowerShell\v1.0\powershell.exe");
             Run(ps, "-NoProfile -ExecutionPolicy Bypass -File " + Q(Path.Combine(EngineDir, "setup.ps1")),
-                c => { if (c == 0) Check(); else lblMsg.Text = "the installation stopped (see the log); press INSTALL to go on"; });
+                c => { if (c == 0) { txtLog.Visible = false; Check(); } else lblMsg.Text = "the installation stopped (see the log); press INSTALL to go on"; });
         }
 
         void LoadProfiles()
@@ -242,7 +239,7 @@ namespace FreeVoiceConvert
             if (cmbProfile.Items.Count > 0) cmbProfile.SelectedIndex = idx >= 0 ? idx : 0;
         }
 
-        const string Media = "Audio and video|*.wav;*.mp3;*.m4a;*.aac;*.flac;*.ogg;*.aif;*.aiff;*.mp4;*.mov;*.m4v;*.mkv;*.avi;*.webm|All files|*.*";
+        const string Media = "Any audio or video file (everything ffmpeg reads)|*.*";
 
         void PickClips()
         {
@@ -250,7 +247,7 @@ namespace FreeVoiceConvert
                 if (o.ShowDialog(this) == DialogResult.OK) foreach (var f in o.FileNames) lstClips.Items.Add(f);
         }
 
-        void PickVoice()
+        void PickVoice(bool thenConvert = false)
         {
             using (var o = new OpenFileDialog { Filter = Media, Title = "A clean recording of the voice (10 to 30 seconds of speech)" })
             {
@@ -263,29 +260,34 @@ namespace FreeVoiceConvert
                     LoadProfiles();
                     var i = profiles.FindIndex(p => p.name == name);
                     if (i >= 0) cmbProfile.SelectedIndex = i;
+                    if (thenConvert) Convert();
                 });
             }
         }
 
         void Convert()
         {
-            if (!(cmbProfile.SelectedItem is Profile p)) { lblMsg.Text = "pick a SOURCE VOICE first"; return; }
+            if (!(cmbProfile.SelectedItem is Profile p)) { PickVoice(true); return; }  // no voice yet: asked once
             if (lstClips.Items.Count == 0) { lblMsg.Text = "add the clips first"; return; }
             outputs.Clear(); btnShow.Visible = false; txtLog.Clear(); bar.Value = 0;
             var job = new Dictionary<string, object>
             {
                 ["clips"] = lstClips.Items.Cast<string>().ToList(),
                 ["profile"] = p.dir,
-                ["voice"] = rConvert.Checked ? "convert" : "keep",
-                ["quality"] = rStudio.Checked ? "studio" : "speech",
+                ["voice"] = "convert",
+                ["quality"] = "speech",
                 ["export"] = rStitch.Checked ? "stitched" : rBoth.Checked ? "both" : "individual",
-                ["clean"] = chkClean.Checked,
+                ["clean"] = true,
                 ["steps"] = 30,
             };
             var path = Path.Combine(Path.GetTempPath(), "fvc-job-" + Guid.NewGuid() + ".json");
             File.WriteAllText(path, json.Serialize(job), new UTF8Encoding(false));
             SaveSettings();
-            Py("run " + Q(path), c => { try { File.Delete(path); } catch { } });
+            Py("run " + Q(path), c =>
+            {
+                try { File.Delete(path); } catch { }
+                if (c == 0 && outputs.Count > 0) Process.Start("explorer.exe", "/select,\"" + outputs[0] + "\"");
+            });
         }
 
         // ---------------------------------------------------------------- remembered choices

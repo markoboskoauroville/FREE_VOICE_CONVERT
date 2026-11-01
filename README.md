@@ -9,8 +9,18 @@ in different spaces and different environments."* The full request is in `moment
 
 ## What it does
 
-One window, two choices and a list: **SOURCE VOICE** (the voice and the room every clip should have) and the clips
-(audio or video, in order). Every clip goes through:
+The window is a workflow (Marko, 1.11.2026: "make all my interface a workflow, 1, 2, 3 ... No more user interface
+buttons"): **1 ADD FILES** (any file ffmpeg reads; the order is the stitch order) → **2 HOW TO EXPORT** (one by one,
+stitched, both) → **3 CONVERT**. The voice recording (the sound profile) is asked once, at the first CONVERT; the
+defaults are CONVERT, SPEECH, CLEAN on (the engine still takes the other settings in its job file).
+
+**Lossless (v2, Marko 1.11.2026: "don't change the original quality ... if it's in kilohertz, you keep the same"):**
+every clip comes out at its own sample rate, bit depth and channel count as WAV (24-bit for lossy sources); a video
+keeps its picture copied bit for bit and gets the sound as PCM in .mov (.mkv for mkv/webm/avi); stitched clips that
+share codec, size and frame rate are joined without re-encoding (otherwise H.264 crf 12). Proven 1.11.2026: 44.1/16
+stereo, 96/24 mono, mp3, mp4 → the same formats out, the mp4's picture identical bit for bit.
+
+Every clip goes through:
 
 1. **Clean**: high-pass 70 Hz and a gentle steady-noise reduction (ffmpeg `afftdn`), the "Clear" we used in Resolve.
 2. **Voice** (CONVERT): Seed-VC, zero-shot speech-to-speech, turns the speech into the profile's voice. The output has
