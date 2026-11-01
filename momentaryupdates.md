@@ -119,4 +119,4 @@ Every request, word for word, saved and pushed before any code.
 
 > "yes, fix download links so every website gets each new version by itself" (Marko, 1.11.2026)
 
-**Status:** in progress 1.11.2026 (MANTRA_MANIFEST modules/download-always-latest.md): fixed addresses download/FreeVoiceConvert.dmg and download/FreeVoiceConvert-Setup.exe, filled by the site workflow from the newest release.
+**Status:** done 1.11.2026 (MANTRA_MANIFEST modules/download-always-latest.md): the buttons link download/FreeVoiceConvert.dmg and download/FreeVoiceConvert-Setup.exe; .github/workflows/site.yml fills them from the newest release after every "Build apps" and writes its tag as the version; site/public/_redirects sends the old versioned names 301 to them. Verified live: both 200, 381900 and 2134572 bytes = release v4, page shows version 4.

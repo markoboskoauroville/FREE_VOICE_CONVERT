@@ -1,7 +1,10 @@
 # TAKEOVER: Free Voice Convert, where it stands (1.11.2026)
 
-**v1 is live:** https://freevoiceconvert.pages.dev (download buttons: download/FreeVoiceConvert-1.dmg and
-FreeVoiceConvert-1-Setup.exe, from release v1). Secrets in the repo: CLOUDFLARE_API_TOKEN (Marko pasted it),
+**Live:** https://freevoiceconvert.pages.dev. Download buttons (fixed, never edited again, 1.11.2026):
+download/FreeVoiceConvert.dmg and download/FreeVoiceConvert-Setup.exe. site.yml fills them from the newest release
+after every successful "Build apps" (workflow_run), writes that release's tag as the version on the page, and
+site/public/_redirects sends the old versioned names (FreeVoiceConvert-N.dmg, -N-Setup.exe) 301 to the fixed ones. A new
+version = raise `let VERSION` in mac/App.swift and push: build.yml makes release vN, the page follows by itself. Secrets in the repo: CLOUDFLARE_API_TOKEN (Marko pasted it),
 CLOUDFLARE_ACCOUNT_ID (set from ~/Downloads/API/Cloudflare.api.txt; it is not a secret, never ask him for it).
 
 **Proven on this Mac (1.11.2026):** setup.sh from nothing to `ready` (uv, Python 3.11.11, torch 2.5.1 on MPS, Seed-VC
@@ -34,7 +37,7 @@ for the pauses, and making STUDIO faster (BigVGAN 44k on the CPU is the slow par
   the width while the list shows more files, the window remembers its place and screen. No VU (removed at his word).
 - **Engine:** each finished clip saved in `done/` (RESUME skips it; deleted when the job completes); downloads resume
   (curl -C -, .done markers, torch wheels by curl). Proven: the 22 HIR_98 clips → stitched_fvc.mov 2:50.8, PCM 24-bit.
-- **Live:** https://freevoiceconvert.pages.dev (FreeVoiceConvert-4.dmg, FreeVoiceConvert-4-Setup.exe, the v4 window).
+- **Live:** https://freevoiceconvert.pages.dev (download/FreeVoiceConvert.dmg, download/FreeVoiceConvert-Setup.exe = release v4, the v4 window).
 - **Damjan:** the message (Free Voice Convert + Voice to Text (Mantra), Croatian) was pasted unsent into WhatsApp
   "AI Videos"; Marko sends it. Damjan's gaming PC will be the first real Windows test of both apps.
 - **Left:** Windows never run on a real PC; STUDIO quality is slow on Macs (BigVGAN 44 k on the CPU); a dereverb step if

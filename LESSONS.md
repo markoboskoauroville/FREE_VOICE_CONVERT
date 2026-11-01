@@ -19,3 +19,9 @@
 9. **Each converted clip is saved whole** (`done/<key>.wav`, written as .part then renamed), keyed by path, size,
    mtime, profile and settings: STOP → RESUME skips finished clips (proven: RESUME went straight to 7/22, 27 %).
 10. **The interface rules of the day** are in MANTRA_MANIFEST modules/workflow-interface.md (the default for every app).
+11. **Download buttons carry no version** (1.11.2026, MANTRA_MANIFEST modules/download-always-latest.md). The page
+   linked FreeVoiceConvert-__VERSION__.dmg with the version from mac/App.swift, so a push that raised the number but had
+   not yet released showed a version whose files did not exist. Now the buttons are fixed names, site.yml copies the
+   newest release's .dmg/.exe to them and takes the version from that release's tag (files and number from one source),
+   and it fails red instead of deploying a page without both files or with a file over Pages' 25 MB. Cloudflare Pages
+   `_redirects` accepts a splat in the middle of a name (`/download/FreeVoiceConvert-*-Setup.exe`): verified 301 live.
