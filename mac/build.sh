@@ -35,7 +35,7 @@ cat > "$APP/Contents/Info.plist" <<PL
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 PL
-if [ -n "$CI" ] || ! security find-identity -v -p codesigning 2>/dev/null | grep -q "Mantra Apps"; then
+if [ -n "$CI" ] || ! security find-identity -p codesigning 2>/dev/null | grep -q "Mantra Apps"; then
   codesign --force --deep -s - "$APP"; echo "ad-hoc signed"
 else
   codesign --force --deep -s "Mantra Apps" "$APP"
