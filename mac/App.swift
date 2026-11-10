@@ -206,6 +206,7 @@ struct ContentView: View {
                 line
                 step3.fixedSize(horizontal: false, vertical: true)
             }
+            Text("© 2026 Mantra Productions").font(.system(size: 11 * scale)).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .center)
         }
         .padding(16)
         .frame(minWidth: 540, maxWidth: .infinity, minHeight: 560, maxHeight: .infinity, alignment: .top)  // glued to the top
